@@ -1,0 +1,30 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+.next/
+
+# AI / ML
+*.h5
+*.keras
+*.pkl
+*.joblib
+
+# Dataset
+dataset/
+datasets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
