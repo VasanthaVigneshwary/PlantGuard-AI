@@ -527,20 +527,46 @@ export default function Home() {
 
                 {/* RESULT HEADER */}
 
-                <div className="rounded-3xl bg-green-50 p-7">
+<div className="rounded-3xl border border-green-200 bg-green-50 p-7 shadow-sm">
 
-                  <p className="text-sm font-medium uppercase tracking-wider text-green-600">
-                    AI Detection Result
-                  </p>
+  <div className="flex items-center gap-3">
 
-                  <h3 className="mt-2 text-3xl font-bold text-green-900">
-                    {disease}
-                  </h3>
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-700 text-2xl">
+      🌱
+    </div>
 
-                  <p className="mt-2 text-lg text-gray-600">
-                    Plant: <strong>{plant}</strong>
-                  </p>
+    <div>
+      <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
+        AI Detection Result
+      </p>
 
+      <p className="text-sm text-gray-500">
+        Analysis completed successfully
+      </p>
+    </div>
+
+  </div>
+
+  <div className="mt-6">
+
+    <p className="text-sm font-medium text-gray-500">
+      Possible condition detected
+    </p>
+
+    <h3 className="mt-1 text-3xl font-bold text-green-900">
+      {disease}
+    </h3>
+
+    <p className="mt-2 text-lg text-gray-600">
+      Plant:{" "}
+      <strong className="text-gray-800">
+        {plant}
+      </strong>
+    </p>
+
+  </div>
+
+</div>
 
                   {/* CONFIDENCE */}
 
@@ -575,52 +601,68 @@ export default function Home() {
                   </div>
 
 
-                  {/* STATUS */}
+                {/* STATUS */}
 
-                  <div className="mt-5 rounded-2xl bg-white p-4">
+<div className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
 
-                    <p className="text-sm text-gray-500">
-                      Confidence Status
-                    </p>
+  <div className="flex items-center justify-between">
 
-                    <p className="mt-1 font-semibold text-gray-800">
-                      {result.status}
-                    </p>
+    <p className="text-sm font-medium text-gray-500">
+      Confidence Status
+    </p>
 
-                  </div>
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-bold ${
+        result.confidence >= 80
+          ? "bg-green-100 text-green-700"
+          : result.confidence >= 50
+          ? "bg-yellow-100 text-yellow-700"
+          : "bg-red-100 text-red-700"
+      }`}
+    >
+      {result.status}
+    </span>
+
+  </div>
+
+  <p className="mt-3 text-2xl font-bold text-gray-800">
+    {result.confidence.toFixed(2)}%
+  </p>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Model confidence for this prediction
+  </p>
+
+</div>
 
 
-                  {/* EXPLANATION */}
+                  
+{/* EXPLANATION */}
 
-                  <div className="mt-4 rounded-2xl bg-white p-5">
+<div className="mt-4 rounded-2xl bg-white p-5">
 
-                    <p className="text-sm font-medium text-gray-500">
-                      💡 What does this mean?
-                    </p>
+  <p className="text-sm font-medium text-gray-500">
+    💡 What does this mean?
+  </p>
 
-                    <p className="mt-2 leading-7 text-gray-700">
-                      {explanation}
-                    </p>
+  <p className="mt-2 leading-7 text-gray-700">
+    {explanation}
+  </p>
 
-                  </div>
+</div>
+{/* ABOUT */}
 
-                </div>
+<div className="rounded-3xl bg-white p-7 shadow">
 
+  <h3 className="text-xl font-bold text-green-800">
+    📖 About This Condition
+  </h3>
 
-                {/* ABOUT */}
+  <p className="mt-4 leading-7 text-gray-700">
+    {diseaseInfo.about}
+  </p>
 
-                <div className="rounded-3xl bg-white p-7 shadow">
-
-                  <h3 className="text-xl font-bold text-green-800">
-                    📖 About This Condition
-                  </h3>
-
-                  <p className="mt-4 leading-7 text-gray-700">
-                    {diseaseInfo.about}
-                  </p>
-
-                </div>
-
+</div>
 
                 {/* SYMPTOMS */}
 
