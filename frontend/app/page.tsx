@@ -3,11 +3,11 @@
 import { useState } from "react";
 
 interface PredictionResult {
-  message: string;
-  filename: string;
+  message?: string;
+  filename?: string;
   prediction: string;
   confidence: number;
-  status: string;
+  status?: string;
 }
 
 interface DiseaseInfo {
@@ -23,19 +23,13 @@ function formatDiseaseName(prediction: string) {
   if (parts.length !== 2) {
     return {
       plant: "Unknown Plant",
-      disease: prediction,
+      disease: prediction.replaceAll("_", " "),
     };
   }
 
   return {
-    plant: parts[0]
-      .replaceAll("_", " ")
-      .replaceAll(",", "")
-      .trim(),
-
-    disease: parts[1]
-      .replaceAll("_", " ")
-      .trim(),
+    plant: parts[0].replaceAll("_", " ").trim(),
+    disease: parts[1].replaceAll("_", " ").trim(),
   };
 }
 
@@ -46,22 +40,19 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
     return {
       about:
         "Late blight is a plant disease that can spread quickly, especially in cool and humid conditions.",
-
       symptoms: [
         "Dark or brown spots on leaves.",
         "Leaves may become weak and die.",
         "Disease may spread rapidly.",
       ],
-
       treatment: [
         "Remove severely affected leaves.",
         "Avoid watering directly over leaves.",
         "Improve air circulation.",
         "Follow the label instructions of suitable plant protection products.",
       ],
-
       prevention: [
-        "Maintain proper spacing.",
+        "Maintain proper spacing between plants.",
         "Keep leaves as dry as possible.",
         "Remove infected plant material.",
       ],
@@ -72,20 +63,17 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
     return {
       about:
         "Early blight is a common fungal disease that can affect leaves and reduce plant growth.",
-
       symptoms: [
         "Small dark spots on older leaves.",
         "Spots may become larger.",
         "Leaves may turn yellow and fall.",
       ],
-
       treatment: [
         "Remove severely affected leaves.",
         "Keep the growing area clean.",
         "Avoid overhead watering.",
         "Use suitable treatment according to the product label.",
       ],
-
       prevention: [
         "Provide good plant spacing.",
         "Remove fallen infected leaves.",
@@ -98,20 +86,17 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
     return {
       about:
         "Powdery mildew commonly appears as a white powder-like coating on plant leaves.",
-
       symptoms: [
-        "White powder-like patches.",
+        "White powder-like patches on leaves.",
         "Leaves may become distorted.",
         "Plant growth may become weaker.",
       ],
-
       treatment: [
         "Remove heavily infected leaves.",
         "Improve air circulation.",
         "Avoid excessive humidity.",
         "Use appropriate treatment according to the product label.",
       ],
-
       prevention: [
         "Give plants enough space.",
         "Avoid excessive watering.",
@@ -124,20 +109,17 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
     return {
       about:
         "Bacterial spot can cause dark or water-soaked spots on leaves and may reduce plant health.",
-
       symptoms: [
         "Small dark spots on leaves.",
         "Spots may enlarge.",
         "Affected leaves may become damaged.",
       ],
-
       treatment: [
         "Remove severely affected plant parts.",
         "Avoid handling plants when leaves are wet.",
         "Improve air circulation.",
         "Follow local agricultural guidance.",
       ],
-
       prevention: [
         "Use clean planting material.",
         "Avoid unnecessary leaf wetting.",
@@ -150,16 +132,13 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
     return {
       about:
         "The AI model did not detect a known disease in the uploaded plant image.",
-
       symptoms: [
         "No major disease symptoms were detected by the model.",
       ],
-
       treatment: [
         "No disease treatment is currently required based on this prediction.",
         "Continue regular plant care and monitoring.",
       ],
-
       prevention: [
         "Provide sufficient water and nutrients.",
         "Maintain good air circulation.",
@@ -171,19 +150,16 @@ function getDiseaseInfo(disease: string): DiseaseInfo {
   return {
     about:
       "The AI model detected a possible plant disease. This result should be treated as an AI-based indication rather than a confirmed diagnosis.",
-
     symptoms: [
       "Symptoms may vary depending on the plant and disease.",
       "Inspect affected leaves carefully.",
     ],
-
     treatment: [
       "Remove severely affected plant parts when appropriate.",
       "Maintain good air circulation.",
       "Avoid unnecessary leaf wetting.",
       "Follow product labels and local agricultural recommendations.",
     ],
-
     prevention: [
       "Keep the growing area clean.",
       "Monitor plants regularly.",
@@ -223,39 +199,39 @@ function getExplanation(disease: string) {
 }
 
 export default function Home() {
-    const scrollToSection = (sectionId: string) => {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [result, setResult] = useState<PredictionResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [affectedPlants, setAffectedPlants] = useState("");
+  const [ratePerPlant, setRatePerPlant] = useState("");
+
+  const scrollToSection = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({
       behavior: "smooth",
     });
   };
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const [result, setResult] =
-    useState<PredictionResult | null>(null);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const [affectedPlants, setAffectedPlants] = useState("");
-  const [ratePerPlant, setRatePerPlant] = useState("");
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     setSelectedFile(file);
     setPreview(URL.createObjectURL(file));
-
     setResult(null);
     setError("");
   };
 
   const analyzePlant = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      return;
+    }
 
     setLoading(true);
     setResult(null);
@@ -298,511 +274,366 @@ export default function Home() {
     setPreview(null);
     setResult(null);
     setError("");
-
     setAffectedPlants("");
     setRatePerPlant("");
   };
 
+  const calculateTreatment = () => {
+    const plants = Number(affectedPlants);
+    const rate = Number(ratePerPlant);
+
+    if (!plants || !rate) {
+      return null;
+    }
+
+    return plants * rate;
+  };
+
+  const treatmentAmount = calculateTreatment();
+
+  const diseaseData = result
+    ? formatDiseaseName(result.prediction)
+    : null;
+
+  const diseaseInfo = diseaseData
+    ? getDiseaseInfo(diseaseData.disease)
+    : null;
+
+  const confidence = result
+    ? Math.max(0, Math.min(Number(result.confidence), 100))
+    : 0;
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-green-50 to-white">
+    <main className="min-h-screen bg-gradient-to-b from-green-50 to-white text-gray-800">
 
       {/* NAVBAR */}
-
-      <nav className="sticky top-0 z-50 border-b border-green-100 bg-white/95 backdrop-blur">
-
-  <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-
-    {/* LOGO */}
-
-    <button
-      onClick={() => scrollToSection("home")}
-      className="flex items-center gap-3"
-    >
-
-      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-2xl">
-        🌱
-      </div>
-
-      <div className="text-left">
-
-        <h1 className="text-lg font-bold text-green-800">
-          Plant Guard AI
-        </h1>
-
-        <p className="text-xs text-green-600">
-          Intelligent Plant Protection
-        </p>
-
-      </div>
-
-    </button>
-
-
-    {/* NAVIGATION */}
-
-    <div className="hidden items-center gap-8 md:flex">
-
-      <button
-        onClick={() => scrollToSection("home")}
-        className="font-medium text-gray-600 transition hover:text-green-700"
-      >
-        Home
-      </button>
-
-      <button
-        onClick={() => scrollToSection("how-it-works")}
-        className="font-medium text-gray-600 transition hover:text-green-700"
-      >
-        How It Works
-      </button>
-
-      <button
-        onClick={() => scrollToSection("about")}
-        className="font-medium text-gray-600 transition hover:text-green-700"
-      >
-        About
-      </button>
-
-    </div>
-
-
-    {/* STATUS */}
-
-    <div className="hidden rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-700 sm:block">
-      AI Disease Detection
-    </div>
-
-  </div>
-
-</nav>
-
-
-      {/* HERO */}
-
-<section
-  id="home"
-  className="mx-auto max-w-6xl px-6 pb-12 pt-16 text-center"
->
-        <div className="mx-auto max-w-3xl">
-
-          <div className="mb-5 text-6xl">
-            🌿
-          </div>
-
-          <h2 className="text-4xl font-bold tracking-tight text-green-900 sm:text-5xl">
-            Protect Your Plants
-            <span className="block text-green-600">
-              With AI
-            </span>
-          </h2>
-
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-gray-600">
-            Upload a plant leaf image and let Plant Guard AI
-            identify possible diseases and provide useful
-            information for better plant care.
-          </p>
-
-        </div>
-
-      </section>
-
-
-      {/* MAIN CARD */}
-
-      <section className="mx-auto max-w-4xl px-6">
-
-        <div className="rounded-3xl border border-green-100 bg-white p-6 shadow-xl sm:p-10">
-
-          <h3 className="text-center text-2xl font-bold text-gray-800">
-            Upload a Plant Image
-          </h3>
-
-          <p className="mt-2 text-center text-gray-500">
-            Choose a clear image of the affected leaf.
-          </p>
-
-
-          {/* UPLOAD */}
-
-          <label
-            htmlFor="plant-image"
-            className="mx-auto mt-8 flex min-h-72 max-w-2xl cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-green-300 bg-green-50 p-8 transition hover:border-green-500 hover:bg-green-100"
+      <nav className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <button
+            onClick={() => scrollToSection("home")}
+            className="text-2xl font-bold text-green-700"
           >
+            🌱 Plant Guard AI
+          </button>
 
-            {preview ? (
-
-              <img
-                src={preview}
-                alt="Selected plant"
-                className="max-h-64 rounded-2xl object-contain shadow-md"
-              />
-
-            ) : (
-
-              <>
-                <div className="mb-4 text-5xl">
-                  📷
-                </div>
-
-                <p className="text-lg font-semibold text-green-800">
-                  Choose Plant Image
-                </p>
-
-                <p className="mt-2 text-sm text-gray-500">
-                  JPG, JPEG, PNG or WEBP
-                </p>
-              </>
-
-            )}
-
-            <input
-              id="plant-image"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-          </label>
-
-
-          {/* FILE */}
-
-          {selectedFile && (
-
-            <p className="mt-4 text-center text-sm text-gray-600">
-              Selected file:{" "}
-              <strong>{selectedFile.name}</strong>
-            </p>
-
-          )}
-
-
-          {/* BUTTON */}
-
-          <div className="mt-7 text-center">
-
+          <div className="hidden gap-8 md:flex">
             <button
-              onClick={analyzePlant}
-              disabled={!selectedFile || loading}
-              className="rounded-full bg-green-700 px-10 py-3.5 font-semibold text-white shadow-md transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+              onClick={() => scrollToSection("home")}
+              className="font-medium hover:text-green-700"
             >
-
-              {loading
-                ? "🔄 Analyzing..."
-                : "🔍 Analyze Plant"}
-
+              Home
             </button>
 
+            <button
+              onClick={() => scrollToSection("how-it-works")}
+              className="font-medium hover:text-green-700"
+            >
+              How It Works
+            </button>
+
+            <button
+              onClick={() => scrollToSection("about")}
+              className="font-medium hover:text-green-700"
+            >
+              About
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* HERO */}
+      <section
+        id="home"
+        className="px-6 py-20 text-center"
+      >
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-5 text-6xl">
+            🌱
           </div>
 
+          <h1 className="text-4xl font-bold tracking-tight text-green-800 md:text-6xl">
+            Plant Guard AI
+          </h1>
 
-          {/* ERROR */}
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-gray-600">
+            AI-powered plant disease detection system that helps
+            identify possible plant diseases from leaf images.
+          </p>
 
-          {error && (
+          <button
+            onClick={() => scrollToSection("analyzer")}
+            className="mt-8 rounded-xl bg-green-600 px-8 py-4 font-semibold text-white shadow-lg transition hover:bg-green-700"
+          >
+            Analyze Your Plant 🌿
+          </button>
+        </div>
+      </section>
 
-            <div className="mt-6 rounded-2xl bg-red-50 p-4 text-center text-red-700">
-              {error}
+      {/* ANALYZER */}
+      <section
+        id="analyzer"
+        className="px-6 py-16"
+      >
+        <div className="mx-auto max-w-5xl rounded-3xl bg-white p-6 shadow-xl md:p-10">
+
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-green-800">
+              Plant Disease Detection
+            </h2>
+
+            <p className="mt-3 text-gray-600">
+              Upload a clear image of a plant leaf to analyze it.
+            </p>
+          </div>
+
+          {/* UPLOAD */}
+          <div className="mt-10 rounded-2xl border-2 border-dashed border-green-300 bg-green-50 p-8 text-center">
+
+            <div className="text-5xl">
+              📷
             </div>
 
+            <h3 className="mt-4 text-xl font-semibold">
+              Upload Plant Image
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-500">
+              JPG, JPEG, PNG or WEBP
+            </p>
+
+            <label className="mt-6 inline-block cursor-pointer rounded-xl bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700">
+              Choose Image
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+
+            {selectedFile && (
+              <p className="mt-4 text-sm font-medium text-green-700">
+                Selected: {selectedFile.name}
+              </p>
+            )}
+          </div>
+
+          {/* IMAGE PREVIEW */}
+          {preview && (
+            <div className="mt-8 text-center">
+              <h3 className="mb-4 text-xl font-semibold">
+                Image Preview
+              </h3>
+
+              <div className="mx-auto max-w-md overflow-hidden rounded-2xl border shadow">
+                <img
+                  src={preview}
+                  alt="Selected plant"
+                  className="max-h-96 w-full object-contain"
+                />
+              </div>
+
+              <button
+                onClick={analyzePlant}
+                disabled={loading}
+                className="mt-6 rounded-xl bg-green-700 px-8 py-4 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading
+                  ? "🔄 Analyzing..."
+                  : "🔍 Analyze Plant"}
+              </button>
+            </div>
           )}
 
+          {/* ERROR */}
+          {error && (
+            <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700">
+              <p className="font-semibold">
+                ⚠️ {error}
+              </p>
+
+              <p className="mt-2 text-sm">
+                Start the FastAPI backend and try again.
+              </p>
+            </div>
+          )}
 
           {/* RESULT */}
+          {result && diseaseData && diseaseInfo && (
+            <div className="mt-10">
 
-          {result && (() => {
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
 
-            const { plant, disease } =
-              formatDiseaseName(result.prediction);
-
-            const diseaseInfo =
-              getDiseaseInfo(disease);
-
-            const explanation =
-              getExplanation(disease);
-
-            return (
-
-              <div className="mt-10 space-y-6">
-
-                {/* RESULT HEADER */}
-
-<div className="rounded-3xl border border-green-200 bg-green-50 p-7 shadow-sm">
-
-  <div className="flex items-center gap-3">
-
-    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-700 text-2xl">
-      🌱
-    </div>
-
-    <div>
-      <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
-        AI Detection Result
-      </p>
-
-      <p className="text-sm text-gray-500">
-        Analysis completed successfully
-      </p>
-    </div>
-
-  </div>
-
-  <div className="mt-6">
-
-    <p className="text-sm font-medium text-gray-500">
-      Possible condition detected
-    </p>
-
-    <h3 className="mt-1 text-3xl font-bold text-green-900">
-      {disease}
-    </h3>
-
-    <p className="mt-2 text-lg text-gray-600">
-      Plant:{" "}
-      <strong className="text-gray-800">
-        {plant}
-      </strong>
-    </p>
-
-  </div>
-
-</div>
-
-                  {/* CONFIDENCE */}
-
-                  <div className="mt-6">
-
-                    <div className="mb-2 flex justify-between text-sm">
-
-                      <span className="font-medium text-gray-600">
-                        Confidence
-                      </span>
-
-                      <span className="font-bold text-green-700">
-                        {result.confidence}%
-                      </span>
-
-                    </div>
-
-                    <div className="h-3 overflow-hidden rounded-full bg-green-200">
-
-                      <div
-                        className="h-full rounded-full bg-green-600 transition-all"
-                        style={{
-                          width: `${Math.min(
-                            result.confidence,
-                            100
-                          )}%`,
-                        }}
-                      />
-
-                    </div>
-
+                <div className="text-center">
+                  <div className="text-5xl">
+                    🌿
                   </div>
 
+                  <p className="mt-3 text-sm font-medium uppercase tracking-wide text-green-600">
+                    AI Detection Result
+                  </p>
 
-                {/* STATUS */}
+                  <h2 className="mt-2 text-3xl font-bold text-green-900">
+                    {diseaseData.disease}
+                  </h2>
 
-<div className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
+                  <p className="mt-2 text-lg text-gray-700">
+                    Plant:{" "}
+                    <span className="font-semibold">
+                      {diseaseData.plant}
+                    </span>
+                  </p>
+                </div>
 
-  <div className="flex items-center justify-between">
+                {/* CONFIDENCE */}
+                <div className="mx-auto mt-8 max-w-2xl">
 
-    <p className="text-sm font-medium text-gray-500">
-      Confidence Status
-    </p>
+                  <div className="mb-2 flex justify-between">
+                    <span className="font-semibold">
+                      Confidence
+                    </span>
 
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-bold ${
-        result.confidence >= 80
-          ? "bg-green-100 text-green-700"
-          : result.confidence >= 50
-          ? "bg-yellow-100 text-yellow-700"
-          : "bg-red-100 text-red-700"
-      }`}
-    >
-      {result.status}
-    </span>
+                    <span className="font-bold text-green-700">
+                      {confidence.toFixed(2)}%
+                    </span>
+                  </div>
 
-  </div>
+                  <div className="h-4 overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      className="h-full rounded-full bg-green-600 transition-all"
+                      style={{
+                        width: Math.min(confidence, 100) + "%",
+                      }}
+                    />
+                  </div>
 
-  <p className="mt-3 text-2xl font-bold text-gray-800">
-    {result.confidence.toFixed(2)}%
-  </p>
+                  <p className="mt-3 text-center text-sm text-gray-600">
+                    {confidence >= 70
+                      ? "High confidence result"
+                      : confidence >= 40
+                      ? "Moderate confidence result"
+                      : "Low confidence result - verify the plant condition manually"}
+                  </p>
+                </div>
 
-  <p className="mt-1 text-sm text-gray-500">
-    Model confidence for this prediction
-  </p>
+                {/* EXPLANATION */}
+                <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                  <h3 className="text-xl font-bold text-green-800">
+                    💡 What does this result mean?
+                  </h3>
 
-</div>
+                  <p className="mt-3 leading-7 text-gray-600">
+                    {getExplanation(diseaseData.disease)}
+                  </p>
+                </div>
 
+              </div>
 
-                  
-{/* EXPLANATION */}
+              {/* CONDITION INFO */}
+              <div className="mt-8 grid gap-6 md:grid-cols-2">
 
-<div className="mt-4 rounded-2xl bg-white p-5">
+                <div className="rounded-2xl bg-white p-6 shadow-md">
+                  <h3 className="text-xl font-bold text-green-800">
+                    📖 About This Condition
+                  </h3>
 
-  <p className="text-sm font-medium text-gray-500">
-    💡 What does this mean?
-  </p>
+                  <p className="mt-3 leading-7 text-gray-600">
+                    {diseaseInfo.about}
+                  </p>
+                </div>
 
-  <p className="mt-2 leading-7 text-gray-700">
-    {explanation}
-  </p>
-
-</div>
-{/* ABOUT */}
-
-<div className="rounded-3xl bg-white p-7 shadow">
-
-  <h3 className="text-xl font-bold text-green-800">
-    📖 About This Condition
-  </h3>
-
-  <p className="mt-4 leading-7 text-gray-700">
-    {diseaseInfo.about}
-  </p>
-
-</div>
-
-                {/* SYMPTOMS */}
-
-                <div className="rounded-3xl bg-white p-7 shadow">
-
+                <div className="rounded-2xl bg-white p-6 shadow-md">
                   <h3 className="text-xl font-bold text-green-800">
                     🔎 Common Symptoms
                   </h3>
 
-                  <ul className="mt-5 space-y-3">
-
+                  <ul className="mt-3 space-y-2 text-gray-600">
                     {diseaseInfo.symptoms.map(
                       (symptom, index) => (
-
-                        <li
-                          key={index}
-                          className="flex gap-3 text-gray-700"
-                        >
-                          <span className="font-bold text-green-600">
-                            ✓
-                          </span>
-
-                          <span>{symptom}</span>
-
+                        <li key={index}>
+                          • {symptom}
                         </li>
-
                       )
                     )}
-
                   </ul>
-
                 </div>
 
+              </div>
 
-                {/* TREATMENT */}
+              {/* TREATMENT */}
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
 
-                <div className="rounded-3xl bg-green-50 p-7">
-
+                <div className="rounded-2xl bg-white p-6 shadow-md">
                   <h3 className="text-xl font-bold text-green-800">
-                    🌿 Recommended Action
+                    🩺 Recommended Action
                   </h3>
 
-                  <ul className="mt-5 space-y-3">
-
+                  <ul className="mt-4 space-y-3 text-gray-600">
                     {diseaseInfo.treatment.map(
                       (item, index) => (
-
-                        <li
-                          key={index}
-                          className="flex gap-3 rounded-xl bg-white p-4 text-gray-700"
-                        >
-
-                          <span className="font-bold text-green-600">
-                            {index + 1}.
-                          </span>
-
-                          <span>{item}</span>
-
+                        <li key={index}>
+                          • {item}
                         </li>
-
                       )
                     )}
-
                   </ul>
-
                 </div>
 
-
-                {/* PREVENTION */}
-
-                <div className="rounded-3xl bg-white p-7 shadow">
-
+                <div className="rounded-2xl bg-white p-6 shadow-md">
                   <h3 className="text-xl font-bold text-green-800">
                     🛡️ Prevention Tips
                   </h3>
 
-                  <ul className="mt-5 space-y-3">
-
+                  <ul className="mt-4 space-y-3 text-gray-600">
                     {diseaseInfo.prevention.map(
-                      (tip, index) => (
-
-                        <li
-                          key={index}
-                          className="flex gap-3 text-gray-700"
-                        >
-
-                          <span className="font-bold text-green-600">
-                            ✓
-                          </span>
-
-                          <span>{tip}</span>
-
+                      (item, index) => (
+                        <li key={index}>
+                          • {item}
                         </li>
-
                       )
                     )}
-
                   </ul>
-
                 </div>
 
+              </div>
 
-                {/* CALCULATOR */}
+              {/* CALCULATOR */}
+              <div className="mt-8 rounded-2xl bg-green-50 p-6 shadow-md">
 
-                <div className="rounded-3xl border border-green-200 bg-white p-7 shadow">
-
-                  <h3 className="text-xl font-bold text-green-800">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-green-800">
                     🧮 Treatment Calculator
                   </h3>
 
-                  <p className="mt-3 text-sm leading-6 text-gray-600">
-                    Enter the number of affected plants and
-                    the recommended solution per plant.
+                  <p className="mt-2 text-gray-600">
+                    Enter the number of affected plants and the
+                    recommended treatment amount per plant.
                   </p>
+                </div>
 
+                <div className="mx-auto mt-6 grid max-w-2xl gap-4 md:grid-cols-2">
 
-                  <div className="mt-6">
-
-                    <label className="font-medium text-gray-700">
-                      🌱 Number of affected plants
+                  <div>
+                    <label className="mb-2 block font-semibold">
+                      Affected Plants
                     </label>
 
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       value={affectedPlants}
                       onChange={(e) =>
                         setAffectedPlants(e.target.value)
                       }
-                      placeholder="Example: 20"
-                      className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-600"
+                      placeholder="Example: 10"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-green-500"
                     />
-
                   </div>
 
-
-                  <div className="mt-5">
-
-                    <label className="font-medium text-gray-700">
-                      💧 Solution per plant (ml)
+                  <div>
+                    <label className="mb-2 block font-semibold">
+                      Rate Per Plant
                     </label>
 
                     <input
@@ -812,164 +643,175 @@ export default function Home() {
                       onChange={(e) =>
                         setRatePerPlant(e.target.value)
                       }
-                      placeholder="Example: 50"
-                      className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-600"
+                      placeholder="Example: 5"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-green-500"
                     />
-
                   </div>
 
-
-                  {affectedPlants &&
-                    ratePerPlant && (
-
-                      <div className="mt-6 rounded-2xl bg-green-50 p-6">
-
-                        <p className="text-sm text-gray-600">
-                          Estimated total solution
-                        </p>
-
-                        <p className="mt-2 text-3xl font-bold text-green-800">
-
-                          {(
-                            Number(affectedPlants) *
-                            Number(ratePerPlant)
-                          ).toLocaleString()}{" "}
-                          ml
-
-                        </p>
-
-                        <p className="mt-2 text-sm text-gray-600">
-
-                          ≈{" "}
-                          {(
-                            (Number(affectedPlants) *
-                              Number(ratePerPlant)) /
-                            1000
-                          ).toFixed(2)}{" "}
-                          litres
-
-                        </p>
-
-                      </div>
-
-                    )}
-
                 </div>
 
+                {treatmentAmount !== null && (
+                  <div className="mx-auto mt-6 max-w-2xl rounded-xl bg-white p-5 text-center shadow">
+                    <p className="text-sm text-gray-500">
+                      Estimated total treatment quantity
+                    </p>
 
-                {/* DISCLAIMER */}
+                    <p className="mt-1 text-3xl font-bold text-green-700">
+                      {treatmentAmount}
+                    </p>
 
-                <div className="rounded-2xl bg-yellow-50 p-5 text-sm leading-6 text-yellow-800">
+                    <p className="mt-1 text-sm text-gray-500">
+                      units
+                    </p>
+                  </div>
+                )}
 
-                  ⚠️ <strong>Important:</strong>{" "}
-                  Plant Guard AI provides an AI-based prediction
-                  and general guidance. It should not be treated
-                  as a confirmed agricultural diagnosis. Always
-                  follow product label instructions and consult
-                  an agricultural expert for serious crop damage.
-
-                </div>
-
-
-                {/* RESET */}
-
-                <div className="pt-2 text-center">
-
-                  <button
-                    onClick={resetAnalysis}
-                    className="rounded-full border-2 border-green-700 px-8 py-3 font-semibold text-green-700 transition hover:bg-green-700 hover:text-white"
-                  >
-                    🔄 Analyze Another Plant
-                  </button>
-
-                </div>
+                <p className="mx-auto mt-5 max-w-2xl text-center text-xs text-gray-500">
+                  Always follow the product label and local
+                  agricultural recommendations for actual dosage.
+                </p>
 
               </div>
 
-            );
+              {/* DISCLAIMER */}
+              <div className="mt-8 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+                <h3 className="font-bold text-yellow-800">
+                  ⚠️ Disclaimer
+                </h3>
 
-          })()}
+                <p className="mt-2 text-sm leading-6 text-yellow-800">
+                  Plant Guard AI provides an AI-based prediction and
+                  should not be considered a confirmed agricultural
+                  diagnosis. For serious crop problems, consult a
+                  qualified agricultural expert.
+                </p>
+              </div>
+
+              {/* RESET */}
+              <div className="mt-8 text-center">
+                <button
+                  onClick={resetAnalysis}
+                  className="rounded-xl border border-green-600 px-7 py-3 font-semibold text-green-700 transition hover:bg-green-50"
+                >
+                  🔄 Analyze Another Plant
+                </button>
+              </div>
+
+            </div>
+          )}
 
         </div>
-
       </section>
 
+      {/* HOW IT WORKS */}
+      <section
+        id="how-it-works"
+        className="bg-green-50 px-6 py-20"
+      >
+        <div className="mx-auto max-w-6xl">
 
-      {/* THREE STEPS */}
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-green-800">
+              How It Works
+            </h2>
 
-<section
-  id="how-it-works"
-  className="mx-auto mt-14 max-w-6xl px-6"
->
-        <div className="grid gap-6 md:grid-cols-3">
-
-          <div className="rounded-3xl bg-white p-7 text-center shadow">
-
-            <div className="text-4xl">
-              📷
-            </div>
-
-            <h3 className="mt-4 text-lg font-bold text-gray-800">
-              1. Upload
-            </h3>
-
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              Upload a clear image of the affected plant leaf.
+            <p className="mt-3 text-gray-600">
+              Plant Guard AI follows three simple steps.
             </p>
-
           </div>
 
+          <div className="mt-12 grid gap-8 md:grid-cols-3">
 
-          <div className="rounded-3xl bg-white p-7 text-center shadow">
+            <div className="rounded-2xl bg-white p-8 text-center shadow-md">
+              <div className="text-5xl">
+                📷
+              </div>
 
-            <div className="text-4xl">
-              🤖
+              <h3 className="mt-5 text-xl font-bold">
+                1. Upload
+              </h3>
+
+              <p className="mt-3 text-gray-600">
+                Upload an image of the plant leaf you want to
+                analyze.
+              </p>
             </div>
 
-            <h3 className="mt-4 text-lg font-bold text-gray-800">
-              2. AI Analysis
-            </h3>
+            <div className="rounded-2xl bg-white p-8 text-center shadow-md">
+              <div className="text-5xl">
+                🤖
+              </div>
 
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              Our trained AI model analyzes the uploaded image.
-            </p>
+              <h3 className="mt-5 text-xl font-bold">
+                2. AI Analysis
+              </h3>
 
-          </div>
-
-
-          <div className="rounded-3xl bg-white p-7 text-center shadow">
-
-            <div className="text-4xl">
-              🌿
+              <p className="mt-3 text-gray-600">
+                The trained deep learning model analyzes the image
+                and predicts a possible condition.
+              </p>
             </div>
 
-            <h3 className="mt-4 text-lg font-bold text-gray-800">
-              3. Get Results
-            </h3>
+            <div className="rounded-2xl bg-white p-8 text-center shadow-md">
+              <div className="text-5xl">
+                🌱
+              </div>
 
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              View the predicted disease and plant care guidance.
-            </p>
+              <h3 className="mt-5 text-xl font-bold">
+                3. Get Results
+              </h3>
+
+              <p className="mt-3 text-gray-600">
+                View the predicted disease, confidence level,
+                symptoms, treatment guidance and prevention tips.
+              </p>
+            </div>
 
           </div>
 
         </div>
-
       </section>
 
+      {/* ABOUT */}
+      <section
+        id="about"
+        className="px-6 py-20"
+      >
+        <div className="mx-auto max-w-4xl text-center">
+
+          <h2 className="text-3xl font-bold text-green-800">
+            About Plant Guard AI
+          </h2>
+
+          <p className="mt-6 leading-8 text-gray-600">
+            Plant Guard AI is a student mini-project designed to
+            demonstrate how artificial intelligence and deep
+            learning can be used to assist with plant disease
+            identification.
+          </p>
+
+          <p className="mt-4 leading-8 text-gray-600">
+            The system accepts a plant leaf image, sends it to the
+            FastAPI backend, and uses a trained deep learning model
+            to generate a disease prediction and confidence score.
+          </p>
+
+        </div>
+      </section>
 
       {/* FOOTER */}
+      <footer className="bg-green-900 px-6 py-10 text-center text-white">
 
-<footer
-  id="about"
-  className="mt-16 border-t border-green-100 bg-white py-8 text-center"
->
-        <p className="font-semibold text-green-800">
+        <div className="text-2xl font-bold">
           🌱 Plant Guard AI
+        </div>
+
+        <p className="mt-3 text-green-100">
+          AI-powered plant disease detection
         </p>
 
-        <p className="mt-2 text-sm text-gray-500">
-          Protecting plants with artificial intelligence.
+        <p className="mt-6 text-sm text-green-200">
+          Mini Project • B.Tech Artificial Intelligence & Data Science
         </p>
 
       </footer>
