@@ -1451,94 +1451,108 @@ export default function Home() {
       </section>
 
       {/* ABOUT */}
-      <section
-        id="about"
-        className="scroll-mt-20 bg-white px-5 py-24"
+<section
+  id="about"
+  className="scroll-mt-20 bg-white px-5 py-24"
+>
+  <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
+
+    <div>
+      <span className="text-sm font-bold uppercase tracking-widest text-green-700">
+        About The Project
+      </span>
+
+      <h2 className="mt-3 text-4xl font-black text-slate-900">
+        Technology for healthier plants
+      </h2>
+
+      <p className="mt-6 text-lg leading-8 text-slate-600">
+        Plant Guard AI is a student mini-project that
+        demonstrates how artificial intelligence and deep
+        learning can assist with plant disease identification.
+      </p>
+
+      <p className="mt-5 leading-7 text-slate-600">
+        The system combines a modern Next.js frontend with
+        a FastAPI backend and a trained EfficientNet-based
+        image classification model.
+      </p>
+
+      <button
+        onClick={() => scrollToSection("analyzer")}
+        className="mt-7 rounded-2xl bg-green-700 px-6 py-3 font-bold text-white transition hover:bg-green-800"
       >
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
+        Try Disease Detection →
+      </button>
+    </div>
 
-          <div>
+    <div className="rounded-[2rem] bg-gradient-to-br from-green-700 to-emerald-600 p-8 text-white shadow-xl">
 
-            <span className="text-sm font-bold uppercase tracking-widest text-green-700">
-              About The Project
-            </span>
+      <div className="text-5xl">
+        🌱
+      </div>
 
-            <h2 className="mt-3 text-4xl font-black text-slate-900">
-              Technology for healthier plants
-            </h2>
+      <h3 className="mt-6 text-3xl font-black">
+        Plant Guard AI
+      </h3>
 
-            <p className="mt-6 text-lg leading-8 text-slate-600">
-              Plant Guard AI is a student mini-project that
-              demonstrates how artificial intelligence and deep
-              learning can assist with plant disease identification.
-            </p>
+      <p className="mt-4 leading-7 text-green-50">
+        An AI-assisted plant health platform designed to
+        make disease identification easier and more accessible.
+      </p>
 
-            <p className="mt-5 leading-7 text-slate-600">
-              The system combines a modern Next.js frontend with
-              a FastAPI backend and a trained EfficientNet-based
-              image classification model.
-            </p>
+      <div className="mt-8 space-y-5">
 
-            <button
-              onClick={() => scrollToSection("analyzer")}
-              className="mt-7 rounded-2xl bg-green-700 px-6 py-3 font-bold text-white transition hover:bg-green-800"
-            >
-              Try Disease Detection →
-            </button>
-
-          </div>
-
-          <div className="rounded-[2rem] bg-gradient-to-br from-green-700 to-emerald-600 p-8 text-white shadow-xl">
-
-            <div className="text-5xl">
-              🌱
-            </div>
-
-            <h3 className="mt-6 text-3xl font-black">
-              Plant Guard AI
-            </h3>
-
-            <p className="mt-4 leading-7 text-green-50">
-              An AI-assisted plant health platform designed to
-              make disease identification easier and more accessible.
-            </p>
-
-            <div className="mt-8 space-y-4">
-
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                  ✓
-                </span>
-                <span>Next.js frontend</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                  ✓
-                </span>
-                <span>FastAPI backend</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                  ✓
-                </span>
-                <span>TensorFlow deep learning</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                  ✓
-                </span>
-                <span>EfficientNet image classification</span>
-              </div>
-
-            </div>
-
-          </div>
-
+        <div>
+          <p className="font-bold">
+            ✓ AI-Powered Disease Detection
+          </p>
+          <p className="mt-1 text-sm text-green-100">
+            Identifies possible plant diseases from uploaded leaf images.
+          </p>
         </div>
-      </section>
+
+        <div>
+          <p className="font-bold">
+            ✓ Confidence-Based Results
+          </p>
+          <p className="mt-1 text-sm text-green-100">
+            Displays the AI prediction along with its confidence score.
+          </p>
+        </div>
+
+        <div>
+          <p className="font-bold">
+            ✓ Disease Information and Symptoms
+          </p>
+          <p className="mt-1 text-sm text-green-100">
+            Provides useful information about detected conditions and symptoms.
+          </p>
+        </div>
+
+        <div>
+          <p className="font-bold">
+            ✓ Treatment and Prevention Guidance
+          </p>
+          <p className="mt-1 text-sm text-green-100">
+            Suggests practical plant-care actions and prevention measures.
+          </p>
+        </div>
+
+        <div>
+          <p className="font-bold">
+            ✓ Treatment Calculator
+          </p>
+          <p className="mt-1 text-sm text-green-100">
+            Estimates treatment quantity based on affected plants and application rate.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
 
       {/* CTA */}
       <section className="px-5 py-20">
