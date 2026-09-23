@@ -8,13 +8,58 @@ interface PredictionResult {
   prediction: string;
   confidence: number;
   status?: string;
+  disease: {
+    id: number;
+    name: string;
+    crop_name: string;
+    description: string;
+  };
+  symptoms: {
+    id: number;
+    name: string;
+    description: string;
+  }[];
+  causes: {
+    id: number;
+    name: string;
+    description: string;
+  }[];
+  treatments: {
+    id: number;
+    name: string;
+    type: string;
+    description: string;
+    instructions: string;
+    precautions: string;
+    application_rates: {
+      id: number;
+      application_method: string;
+      measurement_unit: string;
+      rate: number | null;
+      basis: string;
+      notes: string;
+    }[];
+  }[];
+  prevention: {
+    id: number;
+    title: string;
+    description: string;
+  }[];
 }
 
-interface DiseaseInfo {
+interface LegacyDiseaseInfo {
   about: string;
   symptoms: string[];
   treatment: string[];
   prevention: string[];
+}
+
+interface DatabaseDiseaseInfo {
+  about: string;
+  symptoms: PredictionResult["symptoms"];
+  causes: PredictionResult["causes"];
+  treatment: PredictionResult["treatments"];
+  prevention: PredictionResult["prevention"];
 }
 
 function formatDiseaseName(prediction: string) {
@@ -33,7 +78,7 @@ function formatDiseaseName(prediction: string) {
   };
 }
 
-function getDiseaseInfo(disease: string): DiseaseInfo {
+function getDiseaseInfo(disease: string): LegacyDiseaseInfo {
   const lower = disease.toLowerCase();
 
   if (lower.includes("late blight")) {
@@ -436,11 +481,20 @@ export default function Home() {
   const treatmentAmount = calculateTreatment();
 
   const diseaseData = result
-    ? formatDiseaseName(result.prediction)
+    ? {
+        plant: result.disease.crop_name,
+        disease: result.disease.name,
+      }
     : null;
 
-  const diseaseInfo = diseaseData
-    ? getDiseaseInfo(diseaseData.disease)
+  const diseaseInfo: DatabaseDiseaseInfo | null = result
+    ? {
+        about: result.disease.description,
+        symptoms: result.symptoms,
+        causes: result.causes,
+        treatment: result.treatments,
+        prevention: result.prevention,
+      }
     : null;
 
   const confidence = result
@@ -1106,10 +1160,41 @@ export default function Home() {
                           ✓
                         </span>
 
-                        <span>{symptom}</span>
+                        <span>
+                          <strong>{symptom.name}</strong>
+                          {symptom.description
+                            ? ` — ${symptom.description}`
+                            : ""}
+                        </span>
                       </li>
                     )
                   )}
+                </ul>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-xl">
+                    🧬
+                  </div>
+
+                  <h3 className="text-xl font-black">
+                    Possible Causes
+                  </h3>
+                </div>
+
+                <ul className="mt-5 space-y-3">
+                  {diseaseInfo.causes.map((cause) => (
+                    <li key={cause.id} className="flex gap-3 text-slate-600">
+                      <span className="mt-1 text-purple-600">•</span>
+                      <span>
+                        <strong>{cause.name}</strong>
+                        {cause.description
+                          ? ` — ${cause.description}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </div>
 
@@ -1120,26 +1205,63 @@ export default function Home() {
                   </div>
 
                   <h3 className="text-xl font-black">
-                    Recommended Action
+                    Treatment
                   </h3>
                 </div>
 
-                <ul className="mt-5 space-y-3">
-                  {diseaseInfo.treatment.map(
-                    (item, index) => (
-                      <li
-                        key={index}
-                        className="flex gap-3 text-slate-600"
-                      >
-                        <span className="mt-1 text-orange-500">
-                          •
-                        </span>
+                <div className="mt-5 space-y-5">
+                  {diseaseInfo.treatment.map((treatment) => (
+                    <div key={treatment.id} className="text-slate-600">
+                      <p className="font-bold text-slate-800">
+                        {treatment.name}
+                        {treatment.type ? ` (${treatment.type})` : ""}
+                      </p>
 
-                        <span>{item}</span>
-                      </li>
-                    )
+                      {treatment.description && (
+                        <p className="mt-1">{treatment.description}</p>
+                      )}
+
+                      {treatment.instructions && (
+                        <p className="mt-2 text-sm">
+                          <strong>Instructions:</strong>{" "}
+                          {treatment.instructions}
+                        </p>
+                      )}
+
+                      {treatment.precautions && (
+                        <p className="mt-1 text-sm">
+                          <strong>Precautions:</strong>{" "}
+                          {treatment.precautions}
+                        </p>
+                      )}
+
+                      {treatment.application_rates.length > 0 && (
+                        <div className="mt-3 rounded-xl bg-orange-50 p-3 text-sm">
+                          <p className="font-bold text-orange-900">
+                            Application rates
+                          </p>
+                          <ul className="mt-2 space-y-2">
+                            {treatment.application_rates.map((rate) => (
+                              <li key={rate.id}>
+                                <strong>{rate.application_method}:</strong>{" "}
+                                {rate.rate ?? "Not specified"}{" "}
+                                {rate.measurement_unit}
+                                {rate.basis ? ` (${rate.basis})` : ""}
+                                {rate.notes ? ` — ${rate.notes}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {diseaseInfo.treatment.length === 0 && (
+                    <p className="text-slate-500">
+                      No treatment information is available.
+                    </p>
                   )}
-                </ul>
+                </div>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
@@ -1164,7 +1286,12 @@ export default function Home() {
                           ✓
                         </span>
 
-                        <span>{item}</span>
+                        <span>
+                          <strong>{item.title}</strong>
+                          {item.description
+                            ? ` — ${item.description}`
+                            : ""}
+                        </span>
                       </li>
                     )
                   )}

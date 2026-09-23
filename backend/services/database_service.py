@@ -1,6 +1,63 @@
 from database import get_connection
 
 
+def _normalize_prediction_part(value):
+    normalized = value.replace("_", " ").replace("-", " ")
+    return " ".join(normalized.lower().split())
+
+
+def get_disease_details_by_prediction(prediction):
+    prediction_parts = prediction.split("___", 1)
+
+    if len(prediction_parts) != 2:
+        return None
+
+    crop_name = _normalize_prediction_part(prediction_parts[0])
+    predicted_disease = _normalize_prediction_part(prediction_parts[1])
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT d.id, d.name, c.name AS crop_name
+            FROM diseases d
+            JOIN crops c
+                ON d.crop_id = c.id
+            ORDER BY d.id;
+        """)
+
+        matching_disease_id = None
+
+        for disease_id, disease_name, database_crop_name in cursor.fetchall():
+            normalized_crop_name = _normalize_prediction_part(database_crop_name)
+            normalized_disease_name = _normalize_prediction_part(disease_name)
+
+            if normalized_crop_name != crop_name:
+                continue
+
+            candidates = {
+                normalized_disease_name,
+            }
+
+            crop_prefix = f"{crop_name} "
+            if normalized_disease_name.startswith(crop_prefix):
+                candidates.add(normalized_disease_name[len(crop_prefix):])
+
+            if predicted_disease in candidates:
+                matching_disease_id = disease_id
+                break
+
+        if matching_disease_id is None:
+            return None
+
+    finally:
+        cursor.close()
+        connection.close()
+
+    return get_disease_details(matching_disease_id)
+
+
 def get_all_crops():
     connection = get_connection()
 
