@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface PredictionResult {
   message?: string;
@@ -60,6 +60,82 @@ interface DatabaseDiseaseInfo {
   causes: PredictionResult["causes"];
   treatment: PredictionResult["treatments"];
   prevention: PredictionResult["prevention"];
+}
+
+type TreatmentCalculationResult =
+  | {
+      error: string;
+      quantity: null;
+      totalRequired: null;
+      basisLabel: string;
+      unitLabel: string;
+      rateDisplay: string;
+      calculationText: string;
+    }
+  | {
+      error: null;
+      quantity: number;
+      totalRequired: number;
+      basisLabel: string;
+      unitLabel: string;
+      rateDisplay: string;
+      calculationText: string;
+    };
+
+function getDisplayUnit(measurementUnit: string) {
+  if (!measurementUnit) {
+    return "unit";
+  }
+
+  const cleanUnit = measurementUnit.trim();
+
+  if (cleanUnit.includes("/")) {
+    return cleanUnit.split("/")[0].trim() || "unit";
+  }
+
+  return cleanUnit || "unit";
+}
+
+function getProductDisplayName(
+  treatmentName: string,
+  notes: string
+) {
+  const cleanNotes = (notes || "").trim();
+
+  if (!cleanNotes) {
+    return treatmentName || "Unknown product";
+  }
+
+  const beforeSource = cleanNotes.split(/\s*Source:/i)[0].trim();
+
+  if (beforeSource && beforeSource.length > 0) {
+    return beforeSource.replace(/\.$/, "");
+  }
+
+  return treatmentName || "Unknown product";
+}
+
+function getRateBasisType(measurementUnit: string, basis: string) {
+  const normalizedUnit = (measurementUnit || "").toLowerCase();
+  const normalizedBasis = (basis || "").toLowerCase();
+
+  if (
+    normalizedBasis.includes("plant") ||
+    normalizedUnit.includes("/plant") ||
+    normalizedUnit.includes("plant")
+  ) {
+    return "plant";
+  }
+
+  if (
+    normalizedBasis.includes("acre") ||
+    normalizedUnit.includes("/acre") ||
+    normalizedUnit.includes("acre")
+  ) {
+    return "area";
+  }
+
+  return "unknown";
 }
 
 function formatDiseaseName(prediction: string) {
@@ -297,8 +373,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [affectedPlants, setAffectedPlants] = useState("");
-  const [ratePerPlant, setRatePerPlant] = useState("");
+  const [calculatorQuantity, setCalculatorQuantity] = useState("");
+  const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -368,6 +444,8 @@ export default function Home() {
       }
 
       setResult(data);
+      setSelectedRateId(null);
+      setCalculatorQuantity("");
 
       setTimeout(() => {
         scrollToSection("result");
@@ -388,20 +466,106 @@ export default function Home() {
     setPreview(null);
     setResult(null);
     setError("");
-    setAffectedPlants("");
-    setRatePerPlant("");
+    setCalculatorQuantity("");
+    setSelectedRateId(null);
   };
 
-  const calculateTreatment = () => {
-    const plants = Number(affectedPlants);
-    const rate = Number(ratePerPlant);
+  const calculatorOptions = useMemo(
+    () =>
+      result?.treatments.flatMap((treatment) =>
+        treatment.application_rates
+          .filter(
+            (rate) =>
+              rate.rate !== null &&
+              Number.isFinite(Number(rate.rate)) &&
+              Number(rate.rate) >= 0
+          )
+          .map((rate) => ({
+            rateId: rate.id,
+            treatmentId: treatment.id,
+            treatmentName: treatment.name,
+            treatmentType: treatment.type,
+            productName: getProductDisplayName(
+              treatment.name,
+              rate.notes
+            ),
+            applicationMethod: rate.application_method,
+            measurementUnit: rate.measurement_unit,
+            rate: Number(rate.rate),
+            basis: rate.basis,
+            notes: rate.notes,
+            basisType: getRateBasisType(
+              rate.measurement_unit,
+              rate.basis
+            ),
+          }))
+      ) ?? [],
+    [result]
+  );
 
-    if (!plants || !rate || plants < 0 || rate < 0) {
-      return null;
+  const displayedOptions = useMemo(
+    () => calculatorOptions.filter((option) => option.basisType === "area"),
+    [calculatorOptions]
+  );
+
+  const selectedRate = useMemo(
+    () =>
+      displayedOptions.find((option) => option.rateId === selectedRateId) ??
+      displayedOptions[0] ??
+      null,
+    [displayedOptions, selectedRateId]
+  );
+
+  const treatmentCalculation: TreatmentCalculationResult = useMemo(() => {
+    if (!selectedRate) {
+      return {
+        error: "No area-based application-rate data is available for the selected product.",
+        quantity: null,
+        totalRequired: null,
+        basisLabel: "",
+        unitLabel: "",
+        rateDisplay: "",
+        calculationText: "",
+      };
     }
 
-    return plants * rate;
-  };
+    const quantity = Number(calculatorQuantity);
+
+    if (
+      calculatorQuantity.trim() === "" ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      return {
+        error: "Enter a valid affected area greater than zero.",
+        quantity: null,
+        totalRequired: null,
+        basisLabel: "",
+        unitLabel: "",
+        rateDisplay: "",
+        calculationText: "",
+      };
+    }
+
+    const totalRequired = quantity * selectedRate.rate;
+
+    return {
+      error: null,
+      quantity,
+      totalRequired,
+      basisLabel:
+        selectedRate.basis && selectedRate.basis.trim()
+          ? selectedRate.basis
+          : "per unit",
+      unitLabel: getDisplayUnit(selectedRate.measurementUnit),
+      rateDisplay: `${selectedRate.rate} ${selectedRate.measurementUnit}`,
+      calculationText: `${quantity} acres × ${selectedRate.rate} ${selectedRate.measurementUnit} = ${totalRequired.toFixed(2)} ${getDisplayUnit(selectedRate.measurementUnit)}`,
+    };
+  }, [calculatorQuantity, selectedRate]);
+
+  const hasValidCalculation =
+    treatmentCalculation.error === null &&
+    treatmentCalculation.totalRequired !== null;
 
   const sendChatMessage = () => {
     const message = chatMessage.trim();
@@ -477,8 +641,6 @@ export default function Home() {
       ]);
     }, 500);
   };
-
-  const treatmentAmount = calculateTreatment();
 
   const diseaseData = result
     ? {
@@ -1312,76 +1474,166 @@ export default function Home() {
                   Treatment Calculator
                 </h3>
 
-                <p className="mx-auto mt-2 max-w-xl text-slate-600">
-                  Estimate the total quantity based on the number
-                  of affected plants and the treatment rate.
+                <p className="mx-auto mt-2 max-w-2xl text-slate-600">
+                  Estimate the required treatment quantity using the disease-specific application rates from the agricultural knowledge base.
                 </p>
               </div>
 
-              <div className="mx-auto mt-8 grid max-w-3xl gap-5 md:grid-cols-2">
-
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Number of affected plants
-                  </label>
-
-                  <input
-                    type="number"
-                    min="0"
-                    value={affectedPlants}
-                    onChange={(event) =>
-                      setAffectedPlants(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Example: 10"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-                  />
+              {displayedOptions.length === 0 ? (
+                <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-center text-sm text-slate-600">
+                  No area-based application-rate data is available for this disease in the current knowledge base.
                 </div>
+              ) : (
+                <>
+                  <div className="mx-auto mt-8 max-w-4xl">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <label className="mb-3 block text-sm font-bold text-slate-700">
+                        Affected area
+                      </label>
 
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Treatment amount per plant
-                  </label>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={calculatorQuantity}
+                          onChange={(event) => setCalculatorQuantity(event.target.value)}
+                          placeholder="Example: 0.16"
+                          className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                        />
 
-                  <input
-                    type="number"
-                    min="0"
-                    value={ratePerPlant}
-                    onChange={(event) =>
-                      setRatePerPlant(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Example: 5"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-                  />
-                </div>
+                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-700">
+                          Acres
+                        </div>
+                      </div>
 
-              </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Enter the area of the crop that needs treatment.
+                      </p>
+                    </div>
+                  </div>
 
-              {treatmentAmount !== null && (
-                <div className="mx-auto mt-6 max-w-3xl rounded-2xl bg-white p-6 text-center shadow-md">
+                  <div className="mx-auto mt-8 max-w-4xl">
+                    <p className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">
+                      Treatment / Product
+                    </p>
 
-                  <p className="text-sm font-semibold text-slate-500">
-                    Estimated total treatment quantity
-                  </p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {displayedOptions.map((option) => (
+                        <button
+                          key={option.rateId}
+                          type="button"
+                          onClick={() => setSelectedRateId(option.rateId)}
+                          className={`rounded-2xl border p-4 text-left transition ${
+                            selectedRate?.rateId === option.rateId
+                              ? "border-green-500 bg-green-50 shadow-md"
+                              : "border-slate-200 bg-white hover:border-green-300 hover:bg-green-50/50"
+                          }`}
+                        >
+                          <div className="text-base font-black text-slate-900">
+                            {option.productName}
+                          </div>
 
-                  <p className="mt-2 text-4xl font-black text-green-700">
-                    {treatmentAmount}
-                  </p>
+                          <div className="mt-2 text-sm font-semibold text-green-700">
+                            {option.rate} {option.measurementUnit}
+                          </div>
 
-                  <p className="mt-1 text-xs text-slate-400">
-                    units
-                  </p>
+                          {option.treatmentName && option.productName !== option.treatmentName && (
+                            <div className="mt-1 text-xs text-slate-500">
+                              {option.treatmentName}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                </div>
+                  {selectedRate && (
+                    <div className="mx-auto mt-8 max-w-4xl rounded-2xl bg-white p-6 shadow-md">
+                      <div className="grid gap-4 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="font-bold text-slate-700">Selected product</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {selectedRate.productName}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="font-bold text-slate-700">Application method</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {selectedRate.applicationMethod}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="font-bold text-slate-700">Rate</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {selectedRate.rate} {selectedRate.measurementUnit}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="font-bold text-slate-700">Basis</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {selectedRate.basis || "per unit"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="font-bold text-slate-700">Affected area</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {calculatorQuantity || "0"} acre
+                          </p>
+                        </div>
+
+                        {selectedRate.treatmentName && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="font-bold text-slate-700">Treatment group</p>
+                            <p className="mt-1 text-base font-black text-slate-900">
+                              {selectedRate.treatmentName}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedRate.notes && (
+                        <p className="mt-4 text-sm text-slate-500">
+                          <strong>Notes:</strong> {selectedRate.notes}
+                        </p>
+                      )}
+
+                      {treatmentCalculation.error ? (
+                        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                          {treatmentCalculation.error}
+                        </div>
+                      ) : hasValidCalculation ? (
+                        <>
+                          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
+                            <p className="text-sm font-semibold text-slate-500">
+                              Required quantity
+                            </p>
+
+                            <p className="mt-2 text-4xl font-black text-green-700">
+                              {treatmentCalculation.totalRequired.toFixed(2)}
+                            </p>
+
+                            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                              {treatmentCalculation.unitLabel}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 text-sm leading-6 text-slate-600">
+                            <strong>Calculation:</strong> {treatmentCalculation.calculationText}
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+                </>
               )}
 
               <p className="mx-auto mt-6 max-w-2xl text-center text-xs leading-5 text-slate-500">
-                This calculator is for estimation only. Always
-                follow the product label and local agricultural
-                recommendations for actual dosage.
+                This calculator is for estimation only. Always follow the product label and local agricultural recommendations for actual dosage.
               </p>
 
             </div>
@@ -1671,7 +1923,7 @@ export default function Home() {
             ✓ Treatment Calculator
           </p>
           <p className="mt-1 text-sm text-green-100">
-            Estimates treatment quantity based on affected plants and application rate.
+            Estimates treatment quantity based on affected area and the agricultural application rate.
           </p>
         </div>
 
