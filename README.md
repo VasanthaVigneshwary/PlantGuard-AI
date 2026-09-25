@@ -2,9 +2,22 @@
 
 AI-powered plant disease detection and monitoring system.
 
-## Project Status
+## Current Project Status
 
-🚧 Currently under development.
+The current working MVP includes:
+
+- AI-based plant disease image detection
+- EfficientNet model integration
+- FastAPI backend
+- PostgreSQL disease knowledge base
+- Disease symptoms and causes
+- Treatment and prevention guidance
+- Agricultural application rates
+- Acre-based treatment calculator
+- Low-confidence prediction warning
+- Next.js frontend
+
+This implementation is an academic B.Tech AI & Data Science project focused on practical plant disease detection and crop health support.
 
 ## Planned Features
 
