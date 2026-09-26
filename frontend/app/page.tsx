@@ -62,6 +62,18 @@ interface DatabaseDiseaseInfo {
   prevention: PredictionResult["prevention"];
 }
 
+interface NotificationItem {
+  id: number;
+  user_id: number | null;
+  prediction_id: number | null;
+  title: string;
+  message: string;
+  notification_type: string | null;
+  scheduled_at: string | null;
+  is_read: boolean;
+  created_at: string | null;
+}
+
 type TreatmentCalculationResult =
   | {
       error: string;
@@ -377,8 +389,12 @@ export default function Home() {
   const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const [messages, setMessages] = useState<
     { sender: "bot" | "user"; text: string }[]
@@ -388,6 +404,53 @@ export default function Home() {
       text: "Hi! 🌱 I'm Plant Guard AI. Ask me about plant diseases, symptoms, prevention, or how to use the disease detector.",
     },
   ]);
+
+  const notificationCount = notifications.length;
+
+  const getNotificationIcon = (notificationType?: string | null) => {
+    switch ((notificationType || "").toLowerCase()) {
+      case "monitoring":
+        return "🌿";
+      case "inspection":
+        return "🔍";
+      case "prevention":
+        return "🛡️";
+      case "treatment":
+        return "💧";
+      case "care":
+        return "💡";
+      default:
+        return "🌱";
+    }
+  };
+
+  const fetchNotifications = async () => {
+    setNotificationsLoading(true);
+    setNotificationsError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/notifications", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to load notifications.");
+      }
+
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+    } catch (err) {
+      console.error(err);
+      setNotifications([]);
+      setNotificationsError("Unable to load notifications right now.");
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
 
   const scrollToSection = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({
@@ -567,10 +630,10 @@ export default function Home() {
     treatmentCalculation.error === null &&
     treatmentCalculation.totalRequired !== null;
 
-  const sendChatMessage = () => {
+  const sendChatMessage = async () => {
     const message = chatMessage.trim();
 
-    if (!message) {
+    if (!message || chatLoading) {
       return;
     }
 
@@ -580,66 +643,72 @@ export default function Home() {
         sender: "user",
         text: message,
       },
+      {
+        sender: "bot",
+        text: "Thinking...",
+      },
     ]);
 
     setChatMessage("");
+    setChatLoading(true);
 
-    const lower = message.toLowerCase();
-
-    let response =
-      "I can help with basic plant disease information. Try asking about late blight, symptoms, prevention, or how Plant Guard AI works. 🌱";
-
-    if (
-      lower.includes("late blight") ||
-      lower.includes("lateblight")
-    ) {
-      response =
-        "Late blight is a plant disease that can spread quickly in cool and humid conditions. Look for dark spots on leaves and remove severely affected plant parts when appropriate.";
-    } else if (lower.includes("early blight")) {
-      response =
-        "Early blight commonly causes dark spots on older leaves. Good air circulation, clean growing areas, and avoiding prolonged leaf wetness can help manage the risk.";
-    } else if (
-      lower.includes("powdery mildew") ||
-      lower.includes("mildew")
-    ) {
-      response =
-        "Powdery mildew often appears as white powder-like patches on leaves. Improving air circulation and avoiding excessive humidity can help.";
-    } else if (
-      lower.includes("symptom") ||
-      lower.includes("symptoms")
-    ) {
-      response =
-        "Plant disease symptoms can include leaf spots, yellowing, wilting, white powder-like growth, or damaged plant tissue. Upload a clear leaf image to use the AI detector.";
-    } else if (
-      lower.includes("prevent") ||
-      lower.includes("prevention")
-    ) {
-      response =
-        "Good prevention includes regular plant inspection, proper spacing, good air circulation, clean growing areas, and avoiding unnecessary leaf wetting.";
-    } else if (
-      lower.includes("how") &&
-      lower.includes("work")
-    ) {
-      response =
-        "Plant Guard AI works by accepting a plant leaf image, sending it to the FastAPI backend, and using a trained deep learning model to predict a possible disease and confidence score.";
-    } else if (
-      lower.includes("hello") ||
-      lower.includes("hi") ||
-      lower.includes("hey")
-    ) {
-      response =
-        "Hello! 🌿 I'm Plant Guard AI. How can I help you with your plant today?";
-    }
-
-    setTimeout(() => {
-      setMessages((current) => [
-        ...current,
-        {
-          sender: "bot",
-          text: response,
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ]);
-    }, 500);
+        body: JSON.stringify({
+          message,
+          crop: result?.disease.crop_name || undefined,
+          disease: result?.disease.name || undefined,
+          confidence: result?.confidence ?? undefined,
+          disease_id: result?.disease.id ?? undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to get a grounded response.");
+      }
+
+      setMessages((current) => {
+        const updated = [...current];
+        const botIndex = updated.findLastIndex(
+          (item) => item.sender === "bot" && item.text === "Thinking..."
+        );
+
+        if (botIndex >= 0) {
+          updated[botIndex] = {
+            sender: "bot",
+            text: data.response || "I could not return a response.",
+          };
+        }
+
+        return updated;
+      });
+    } catch (err) {
+      console.error(err);
+
+      setMessages((current) => {
+        const updated = [...current];
+        const botIndex = updated.findLastIndex(
+          (item) => item.sender === "bot" && item.text === "Thinking..."
+        );
+
+        if (botIndex >= 0) {
+          updated[botIndex] = {
+            sender: "bot",
+            text: "I could not reach the Plant Guard AI assistant right now. Please try again in a moment.",
+          };
+        }
+
+        return updated;
+      });
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const diseaseData = result
@@ -724,15 +793,24 @@ export default function Home() {
 
           <div className="relative">
             <button
-              onClick={() =>
-                setNotificationsOpen(!notificationsOpen)
-              }
+              onClick={async () => {
+                const nextState = !notificationsOpen;
+                setNotificationsOpen(nextState);
+
+                if (nextState && notifications.length === 0 && !notificationsLoading) {
+                  await fetchNotifications();
+                }
+              }}
               className="relative flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl shadow-sm transition hover:bg-green-50"
               aria-label="Notifications"
             >
               🔔
 
-              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+              {notificationCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                  {notificationCount}
+                </span>
+              )}
             </button>
 
             {notificationsOpen && (
@@ -750,54 +828,47 @@ export default function Home() {
                   </div>
 
                   <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
-                    3
+                    {notificationCount}
                   </span>
                 </div>
 
-                <div className="space-y-1 p-2">
-
-                  <button className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-green-50">
-                    <span className="text-xl">🌿</span>
-
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Plant health check
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        Upload a leaf image for AI analysis.
-                      </p>
+                <div className="max-h-80 overflow-y-auto p-2">
+                  {notificationsLoading && (
+                    <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      Loading notifications...
                     </div>
-                  </button>
+                  )}
 
-                  <button className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-green-50">
-                    <span className="text-xl">🔍</span>
-
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Monitor your plants
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        Regular inspection can help identify issues early.
-                      </p>
+                  {!notificationsLoading && notificationsError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {notificationsError}
                     </div>
-                  </button>
+                  )}
 
-                  <button className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-green-50">
-                    <span className="text-xl">💡</span>
-
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Plant care reminder
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        Maintain good spacing and airflow.
-                      </p>
+                  {!notificationsLoading && !notificationsError && notifications.length === 0 && (
+                    <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      No notifications right now. Check back later for plant-care reminders.
                     </div>
-                  </button>
+                  )}
 
+                  {!notificationsLoading && !notificationsError && notifications.length > 0 && notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-green-50"
+                    >
+                      <span className="text-xl">{getNotificationIcon(notification.notification_type)}</span>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {notification.title}
+                        </p>
+
+                        <p className="text-xs text-slate-500">
+                          {notification.message}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="border-t bg-slate-50 p-3 text-center">
@@ -2125,6 +2196,7 @@ export default function Home() {
               <input
                 type="text"
                 value={chatMessage}
+                disabled={chatLoading}
                 onChange={(event) =>
                   setChatMessage(event.target.value)
                 }
@@ -2133,15 +2205,16 @@ export default function Home() {
                     sendChatMessage();
                   }
                 }}
-                placeholder="Ask about plant health..."
-                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                placeholder={chatLoading ? "Thinking..." : "Ask about plant health..."}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
 
               <button
                 onClick={sendChatMessage}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-700 text-lg text-white transition hover:bg-green-800"
+                disabled={chatLoading}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-700 text-lg text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                ➤
+                {chatLoading ? "…" : "➤"}
               </button>
 
             </div>
