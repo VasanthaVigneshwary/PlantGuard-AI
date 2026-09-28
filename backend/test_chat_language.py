@@ -64,6 +64,45 @@ def test_chat_defaults_to_english_for_unsupported_language(monkeypatch):
     assert "symptoms" in response.json()["response"].lower()
 
 
+def test_tamil_chat_routes_common_question_variants_to_specific_branches(monkeypatch):
+    monkeypatch.setattr(
+        plant,
+        "get_disease_details",
+        lambda disease_id: {
+            "disease": (1, "Tomato Late Blight", "Tomato", "Late blight disease description"),
+            "symptoms": [(1, "Dark leaf lesions", "Leaf lesions appear on leaves")],
+            "causes": [(1, "Humidity", "Humidity is high")],
+            "treatments": [(1, "Copper fungicide", "Fungicide", "Treat with proper fungicide", "Use as directed", "Wear protection", [(1, "Foliar spray", "L/acre", 1.5, "acre", "Apply as needed")])],
+            "prevention": [(1, "Good air circulation", "Improve spacing")],
+        },
+    )
+
+    cases = [
+        ("அறிகுறிகள் என்ன?", "அறிகுறிகள்"),
+        ("காரணம் என்ன?", "காரண"),
+        ("எப்படி சிகிச்சை செய்வது?", "சிகிச்சை"),
+        ("எப்படி தடுப்பது?", "தடுப்பு"),
+        ("இந்த நோய் என்ன?", "நோய்"),
+        ("2 ஏக்கருக்கு எவ்வளவு மருந்து வேண்டும்?", "ஏக்கர்"),
+    ]
+
+    for message, expected_fragment in cases:
+        response = client.post(
+            "/api/chat",
+            json={
+                "message": message,
+                "crop": "Tomato",
+                "disease": "Tomato Late Blight",
+                "confidence": 9.37,
+                "disease_id": 1,
+                "language": "ta",
+            },
+        )
+
+        assert response.status_code == 200, message
+        assert expected_fragment in response.json()["response"], (message, response.json()["response"])
+
+
 def test_upload_localizes_dynamic_explanation_for_tamil(monkeypatch):
     monkeypatch.setattr(
         plant,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface PredictionResult {
   message?: string;
@@ -109,6 +109,7 @@ const translations: Record<Language, Record<string, string>> = {
     notificationsEmpty: "No notifications right now. Check back later for plant-care reminders.",
     noNotifications: "No notifications right now.",
     assistantOnline: "Assistant online",
+    analyzeAnotherPlant: "Analyze Another Plant",
     welcomeBot: "Hi! 🌱 I'm Plant Guard AI. Ask me about plant diseases, symptoms, prevention, or how to use the disease detector.",
     heroBadge: "AI-powered plant health detection",
     heroCTA: "🔍 Detect Disease",
@@ -235,6 +236,7 @@ const translations: Record<Language, Record<string, string>> = {
     notificationsEmpty: "தற்சமயம் அறிவிப்புகள் இல்லை. சிறிது நேரம் கழித்து மீண்டும் பார்க்கவும்.",
     noNotifications: "தற்சமயம் அறிவிப்புகள் இல்லை.",
     assistantOnline: "செயல்பாட்டில் உள்ளது",
+    analyzeAnotherPlant: "மற்றொரு தாவரத்தை பகுப்பாய்வு செய்யுங்கள்",
     welcomeBot: "வணக்கம்! 🌱 நான் Plant Guard AI. தாவர நோய்கள், அறிகுறிகள், தடுப்பு அல்லது நோய் கண்டறிதல் பற்றி கேளுங்கள்.",
     heroBadge: "AI-ஆல் இயக்கப்படும் தாவர ஆரோக்கிய கண்டறிதல்",
     heroCTA: "🔍 நோயைக் கண்டறி",
@@ -604,6 +606,45 @@ function getDiseaseInfo(disease: string): LegacyDiseaseInfo {
   };
 }
 
+function getLocalizedDisplayName(value: string | undefined, language: Language) {
+  if (!value) {
+    return value ?? "";
+  }
+
+  if (language !== "ta") {
+    return value;
+  }
+
+  const translations: Record<string, string> = {
+    Tomato: "தக்காளி",
+    "Tomato Late Blight": "தக்காளி லேட் ப்ளைட்",
+    "Late blight": "லேட் ப்ளைட்",
+    "Early blight": "ஆரம்பகால ப்ளைட்",
+    "Powdery mildew": "பவுடரி மில்டெவ்",
+    "Bacterial spot": "பாக்டீரியா ஸ்பாட்",
+    "Leaf spot": "இலை புள்ளி",
+    "Apple scab": "ஆப்பிள் ஸ்கேப்",
+    "Black rot": "பிளாக் ராட்",
+    Healthy: "ஆரோக்கியமான",
+  };
+
+  const normalized = value.trim();
+
+  for (const [english, tamil] of Object.entries(translations)) {
+    if (normalized.toLowerCase() === english.toLowerCase()) {
+      return tamil;
+    }
+  }
+
+  for (const [english, tamil] of Object.entries(translations)) {
+    if (normalized.toLowerCase().includes(english.toLowerCase())) {
+      return normalized.replace(new RegExp(english, "gi"), tamil);
+    }
+  }
+
+  return normalized;
+}
+
 function getExplanation(disease: string, language: Language) {
   const lower = disease.toLowerCase();
 
@@ -665,34 +706,14 @@ export default function Home() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [language, setLanguage] = useState<Language>("en");
-
-  const t = translations[language];
-
-  useEffect(() => {
-    const savedLanguage = sessionStorage.getItem("plant-guard-language");
-    if (savedLanguage === "en" || savedLanguage === "ta") {
-      setLanguage(savedLanguage as Language);
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window === "undefined") {
+      return "en";
     }
-  }, []);
 
-  useEffect(() => {
-    sessionStorage.setItem("plant-guard-language", language);
-  }, [language]);
-
-  useEffect(() => {
-    setMessages((current) => {
-      const hasOnlyWelcomeMessage =
-        current.length === 1 && current[0]?.sender === "bot";
-
-      if (!hasOnlyWelcomeMessage) {
-        return current;
-      }
-
-      return [{ sender: "bot", text: t.welcomeBot }];
-    });
-  }, [language, t.welcomeBot]);
-
+    const savedLanguage = sessionStorage.getItem("plant-guard-language");
+    return savedLanguage === "ta" ? "ta" : "en";
+  });
   const [messages, setMessages] = useState<
     { sender: "bot" | "user"; text: string }[]
   >([
@@ -701,6 +722,66 @@ export default function Home() {
       text: translations.en.welcomeBot,
     },
   ]);
+  const resultSectionRef = useRef<HTMLElement | null>(null);
+  const previousResultKeyRef = useRef<string>("");
+  const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+
+  const t = translations[language];
+
+  useEffect(() => {
+    sessionStorage.setItem("plant-guard-language", language);
+  }, [language]);
+
+  useEffect(() => {
+    if (!result || !resultSectionRef.current) {
+      return;
+    }
+
+    const currentResultKey = `${result.disease?.id ?? "unknown"}-${result.confidence ?? "0"}-${result.disease?.name ?? ""}`;
+
+    if (currentResultKey === previousResultKeyRef.current) {
+      return;
+    }
+
+    previousResultKeyRef.current = currentResultKey;
+
+    const scrollTarget = () => {
+      if (!resultSectionRef.current) {
+        return;
+      }
+
+      resultSectionRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    };
+
+    requestAnimationFrame(scrollTarget);
+  }, [result]);
+
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTo({
+        top: chatMessagesRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages, chatOpen]);
+
+  const handleLanguageChange = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+
+    setMessages((current) => {
+      const hasOnlyWelcomeMessage =
+        current.length === 1 && current[0]?.sender === "bot";
+
+      if (hasOnlyWelcomeMessage) {
+        return [{ sender: "bot", text: translations[nextLanguage].welcomeBot }];
+      }
+
+      return current;
+    });
+  };
 
   const notificationCount = notifications.length;
 
@@ -807,10 +888,6 @@ export default function Home() {
       setResult(data);
       setSelectedRateId(null);
       setCalculatorQuantity("");
-
-      setTimeout(() => {
-        scrollToSection("result");
-      }, 200);
     } catch (err) {
       console.error(err);
 
@@ -928,6 +1005,21 @@ export default function Home() {
     treatmentCalculation.error === null &&
     treatmentCalculation.totalRequired !== null;
 
+  const findPendingBotMessageIndex = (
+    currentMessages: { sender: "bot" | "user"; text: string }[],
+    placeholderText: string
+  ) => {
+    const pendingPlaceholders = new Set([
+      "Thinking...",
+      "சிந்திக்கிறது...",
+      placeholderText,
+    ]);
+
+    return currentMessages.findLastIndex(
+      (item) => item.sender === "bot" && pendingPlaceholders.has(item.text)
+    );
+  };
+
   const sendChatMessage = async () => {
     const message = chatMessage.trim();
 
@@ -950,6 +1042,15 @@ export default function Home() {
     setChatMessage("");
     setChatLoading(true);
 
+    const startedAt = Date.now();
+    if (language === "ta") {
+      console.log("[chat:ta] request-start", {
+        message: message.slice(0, 120),
+        disease: result?.disease?.name || null,
+        startedAt,
+      });
+    }
+
     try {
       const response = await fetch("http://127.0.0.1:8000/api/chat", {
         method: "POST",
@@ -968,15 +1069,21 @@ export default function Home() {
 
       const data = await response.json();
 
+      if (language === "ta") {
+        console.log("[chat:ta] response", {
+          status: response.status,
+          elapsedMs: Date.now() - startedAt,
+          responseLength: data?.response?.length || 0,
+        });
+      }
+
       if (!response.ok) {
         throw new Error(data.detail || "Unable to get a grounded response.");
       }
 
       setMessages((current) => {
         const updated = [...current];
-        const botIndex = updated.findLastIndex(
-          (item) => item.sender === "bot" && item.text === "Thinking..."
-        );
+        const botIndex = findPendingBotMessageIndex(updated, t.chatThinking);
 
         if (botIndex >= 0) {
           updated[botIndex] = {
@@ -990,11 +1097,15 @@ export default function Home() {
     } catch (err) {
       console.error(err);
 
+      if (language === "ta") {
+        console.log("[chat:ta] error", {
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
+
       setMessages((current) => {
         const updated = [...current];
-        const botIndex = updated.findLastIndex(
-          (item) => item.sender === "bot" && item.text === "Thinking..."
-        );
+        const botIndex = findPendingBotMessageIndex(updated, t.chatThinking);
 
         if (botIndex >= 0) {
           updated[botIndex] = {
@@ -1012,8 +1123,8 @@ export default function Home() {
 
   const diseaseData = result
     ? {
-        plant: result.disease.crop_name,
-        disease: result.disease.name,
+        plant: getLocalizedDisplayName(result.disease.crop_name, language),
+        disease: getLocalizedDisplayName(result.disease.name, language),
       }
     : null;
 
@@ -1060,7 +1171,7 @@ export default function Home() {
             </div>
           </button>
 
-          <div className="hidden items-center gap-7 md:flex">
+          <div className="hidden flex-wrap items-center gap-4 md:flex md:gap-7">
             <button
               onClick={() => scrollToSection("home")}
               className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
@@ -1096,7 +1207,7 @@ export default function Home() {
 
               <select
                 value={language}
-                onChange={(event) => setLanguage(event.target.value as Language)}
+                onChange={(event) => handleLanguageChange(event.target.value as Language)}
                 className="bg-transparent font-semibold text-slate-700 outline-none"
                 aria-label="Select website language"
               >
@@ -1466,7 +1577,7 @@ export default function Home() {
                 <div className="mb-5 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold uppercase tracking-wide text-green-700">
-                      Preview
+                      {language === "ta" ? "முன்னோட்டம்" : "Preview"}
                     </p>
 
                     <h3 className="mt-1 text-2xl font-black">
@@ -1482,7 +1593,7 @@ export default function Home() {
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
                   <img
                     src={preview}
-                    alt="Selected plant leaf"
+                    alt={language === "ta" ? "தேர்ந்தெடுக்கப்பட்ட தாவர இலை" : "Selected plant leaf"}
                     className="mx-auto max-h-[500px] w-full object-contain"
                   />
                 </div>
@@ -1520,7 +1631,7 @@ export default function Home() {
 
                   <div>
                     <h3 className="font-bold text-red-800">
-                      Analysis failed
+                      {language === "ta" ? "பகுப்பாய்வு தோல்வியடைந்தது" : "Analysis failed"}
                     </h3>
 
                     <p className="mt-1 text-sm text-red-700">
@@ -1539,6 +1650,7 @@ export default function Home() {
       {result && diseaseData && diseaseInfo && (
         <section
           id="result"
+          ref={resultSectionRef}
           className="scroll-mt-20 bg-slate-100 px-5 py-20"
         >
           <div className="mx-auto max-w-6xl">
@@ -1801,7 +1913,9 @@ export default function Home() {
 
                   {diseaseInfo.treatment.length === 0 && (
                     <p className="text-slate-500">
-                      No treatment information is available.
+                      {language === "ta"
+                        ? "சிகிச்சை தகவல் தற்போது கிடைக்கவில்லை."
+                        : "No treatment information is available."}
                     </p>
                   )}
                 </div>
@@ -1856,13 +1970,17 @@ export default function Home() {
                 </h3>
 
                 <p className="mx-auto mt-2 max-w-2xl text-slate-600">
-                  Estimate the required treatment quantity using the disease-specific application rates from the agricultural knowledge base.
+                  {language === "ta"
+                    ? "இந்த நோய்க்கான விவசாய அறிவு தள பயன்பாட்டு வீதங்களைப் பயன்படுத்தி தேவையான சிகிச்சை அளவை மதிப்பிடுங்கள்."
+                    : "Estimate the required treatment quantity using the disease-specific application rates from the agricultural knowledge base."}
                 </p>
               </div>
 
               {displayedOptions.length === 0 ? (
                 <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-center text-sm text-slate-600">
-                  No area-based application-rate data is available for this disease in the current knowledge base.
+                  {language === "ta"
+                    ? "தற்போதைய அறிவுத் தரவுத்தளத்தில் இந்த நோய்க்கு பரப்பளவின்படி பயன்பாட்டு வீதத் தகவல் இல்லை."
+                    : "No area-based application-rate data is available for this disease in the current knowledge base."}
                 </div>
               ) : (
                 <>
@@ -1889,7 +2007,9 @@ export default function Home() {
                       </div>
 
                       <p className="mt-2 text-xs text-slate-500">
-                        Enter the area of the crop that needs treatment.
+                        {language === "ta"
+                          ? "சிகிச்சை தேவைப்படும் பயிரின் பரப்பளவைக் குறிப்பிடவும்."
+                          : "Enter the area of the crop that needs treatment."}
                       </p>
                     </div>
                   </div>
@@ -1954,24 +2074,34 @@ export default function Home() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="font-bold text-slate-700">Basis</p>
+                          <p className="font-bold text-slate-700">
+                            {language === "ta" ? "அடிப்படை" : "Basis"}
+                          </p>
                           <p className="mt-1 text-base font-black text-slate-900">
-                            {selectedRate.basis || "per unit"}
+                            {language === "ta"
+                              ? selectedRate.basis?.toLowerCase().includes("acre")
+                                ? "ஒரு ஏக்கருக்கு"
+                                : selectedRate.basis || "ஒரு அலகுக்கு"
+                              : selectedRate.basis || "per unit"}
                           </p>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                           <p className="font-bold text-slate-700">{t.affectedArea}</p>
                           <p className="mt-1 text-base font-black text-slate-900">
-                            {calculatorQuantity || "0"} acre
+                            {calculatorQuantity || "0"} {language === "ta" ? "ஏக்கர்" : "acre"}
                           </p>
                         </div>
 
                         {selectedRate.treatmentName && (
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="font-bold text-slate-700">Treatment group</p>
+                            <p className="font-bold text-slate-700">
+                              {language === "ta" ? "சிகிச்சை குழு" : "Treatment group"}
+                            </p>
                             <p className="mt-1 text-base font-black text-slate-900">
-                              {selectedRate.treatmentName}
+                              {language === "ta" && selectedRate.treatmentName === "Late Blight Management"
+                                ? "லேட் ப்ளைட் மேலாண்மை"
+                                : selectedRate.treatmentName}
                             </p>
                           </div>
                         )}
@@ -2049,7 +2179,7 @@ export default function Home() {
                 onClick={resetAnalysis}
                 className="rounded-2xl border border-green-600 bg-white px-7 py-4 font-bold text-green-700 transition hover:bg-green-50"
               >
-                🔄 Analyze Another Plant
+                🔄 {t.analyzeAnotherPlant}
               </button>
             </div>
 
@@ -2442,7 +2572,7 @@ export default function Home() {
 
                   <div className="mt-0.5 flex items-center gap-1.5 text-xs text-green-100">
                     <span className="h-2 w-2 rounded-full bg-green-300" />
-                    Assistant online
+                    {t.chatInline}
                   </div>
                 </div>
 
@@ -2460,7 +2590,10 @@ export default function Home() {
           </div>
 
           {/* MESSAGES */}
-          <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-4">
+          <div
+            ref={chatMessagesRef}
+            className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-4"
+          >
 
             {messages.map((message, index) => (
               <div

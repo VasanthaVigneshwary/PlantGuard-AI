@@ -41,6 +41,8 @@ def normalize_language(value: str | None) -> str:
 
 TAMIL_TEXT_MAP = {
     "Plant identified as": "தாவர அடையாளம்: ",
+    "Preview": "முன்னோட்டம்",
+    "Selected plant leaf": "தேர்ந்தெடுக்கப்பட்ட தாவர இலை",
     "Low confidence result. Manual verification is strongly recommended.": "குறைந்த நம்பகத்தன்மை கொண்ட முடிவு. கைமுறையாக சரிபார்ப்பது மிகவும் பரிந்துரைக்கப்படுகிறது.",
     "Moderate confidence result. Consider verifying the symptoms.": "மிதமான நம்பகத்தன்மை கொண்ட முடிவு. அறிகுறிகளைச் சரிபார்க்க பரிந்துரைக்கப்படுகிறது.",
     "High confidence result.": "அதிக நம்பகத்தன்மை கொண்ட முடிவு.",
@@ -56,7 +58,8 @@ TAMIL_TEXT_MAP = {
     "Precautions:": "ஜாக்கிரதைகள்:",
     "Notes:": "குறிப்புகள்:",
     "Calculation:": "கணக்கீடு:",
-    "Source: TNAU Agritech Portal. Verify current product label and local approval before use.": "மூலம்: TNAU Agritech Portal. பயன்பாட்டுக்கு முன் தற்போதைய தயாரிப்பு லேபிள் மற்றும் உள்ளூர் ஒப்புதலைச் சரிபார்க்கவும்.",
+    "Source": "ஆதாரம்",
+    "Source: TNAU Agritech Portal. Verify current product label and local approval before use.": "ஆதாரம்: TNAU Agritech Portal. பயன்பாட்டுக்கு முன் தற்போதைய தயாரிப்பு லேபிள் மற்றும் உள்ளூர் ஒப்புதலைச் சரிபார்க்கவும்.",
     "Plant image analyzed successfully 🌱": "தாவர படம் வெற்றிகரமாக பகுப்பாய்வு செய்யப்பட்டது 🌱",
     "No major disease symptoms were detected by the model.": "மாடல் எந்த முக்கிய நோய் அறிகுறிகளையும் கண்டறியவில்லை.",
     "Continue monitoring the plant regularly.": "தாவரத்தை தொடர்ந்து கண்காணிக்கவும்.",
@@ -67,15 +70,23 @@ TAMIL_TEXT_MAP = {
     "Fruit lesions": "பழங்களில் புண்கள்",
     "Fruit rot": "பழ அழுகல்",
     "High humidity": "அதிக ஈரப்பதம்",
-    "Excess leaf wetness": "அதிகமான இலை ஈரப்புத்தன்மை",
+    "Excess leaf wetness": "இலைகளின் அதிக ஈரப்புத்தன்மை",
     "Poor air circulation": "மோசமான காற்றோட்டம்",
     "Favorable temperature": "சிறந்த வெப்பநிலை",
     "Late Blight Management": "லேட் ப்ளைட் மேலாண்மை",
+    "Late Blight Management (Disease management)": "லேட் ப்ளைட் மேலாண்மை (நோய் மேலாண்மை)",
+    "Disease management": "நோய் மேலாண்மை",
     "Integrated management of tomato late blight": "தக்காளி லேட் ப்ளைட்டை ஒருங்கிணைந்த முறையில் மேலாண்மை செய்தல்",
-    "Foliar spray": "இலை தெளிப்பு",
+    "Foliar spray": "இலைத் தெளிப்பு",
     "Good air circulation": "சிறந்த காற்றோட்டம்",
+    "Improve air circulation": "காற்றோட்டத்தை மேம்படுத்தவும்",
+    "Avoid prolonged leaf wetness": "இலைகளில் நீண்ட நேரம் ஈரப்பதம் இருக்காமல் தவிர்க்கவும்",
+    "Remove infected plant material": "பாதிக்கப்பட்ட தாவரப் பொருட்களை அகற்றவும்",
+    "Use healthy planting material": "ஆரோக்கியமான நாற்று/விதை பொருளைப் பயன்படுத்தவும்",
+    "Monitor crops regularly": "பயிர்களை தொடர்ந்து கண்காணிக்கவும்",
     "Apply as needed": "தேவைக்கேற்பப் பயன்படுத்தவும்",
-    "Apply as directed": "வழிமுறைகளின்படி பயன்படுத்தவும்",
+    "Apply as directed": "வழிமுறைகள்: வழிமுறைகளின்படி பயன்படுத்தவும்",
+    "Use as directed": "வழிமுறைகள்: வழிமுறைகளின்படி பயன்படுத்தவும்",
     "Wear protective clothing": "பாதுகாப்பு ஆடைகளை அணியவும்",
     "Avoid overhead irrigation": "மேல் நீர்ப்பாசனத்தை தவிர்க்கவும்",
     "Remove infected debris": "பாதிக்கப்பட்ட கழிவுகளை அகற்றவும்",
@@ -91,7 +102,50 @@ TAMIL_TEXT_MAP = {
     "Plant identified as": "தாவர அடையாளம்:",
     "Continue regular plant care and monitoring": "வழக்கமான தாவர பராமரிப்பு மற்றும் கண்காணிப்பை தொடரவும்",
     "Results may vary": "முடிவுகள் மாறலாம்",
+    "Basis": "அடிப்படை",
+    "per acre": "ஒரு ஏக்கருக்கு",
+    "per unit": "ஒரு அலகுக்கு",
+    "per plant": "ஒரு செடியுக்கு",
+    "Application rate": "பயன்பாட்டு வீதம்",
+    "Application method": "பயன்பாட்டு முறை",
+    "Treatment group": "சிகிச்சை குழு",
+    "No treatment information is available.": "சிகிச்சை தகவல் தற்போது கிடைக்கவில்லை.",
+    "Enter a valid affected area greater than zero.": "சரியான பாதிக்கப்பட்ட பரப்பளவை (பூஜ்ஜியத்தை விட அதிகமாக) உள்ளிடவும்.",
+    "Enter the area of the crop that needs treatment.": "சிகிச்சை தேவைப்படும் பயிரின் பரப்பளவைக் குறிப்பிடவும்.",
+    "Treatment": "சிகிச்சை",
+    "Prevention": "தடுப்பு",
+    "Symptoms": "அறிகுறிகள்",
+    "Causes": "காரணங்கள்",
 }
+
+DISPLAY_NAME_TRANSLATIONS = {
+    "Tomato": "தக்காளி",
+    "Tomato Late Blight": "தக்காளி லேட் ப்ளைட்",
+    "Late blight": "லேட் ப்ளைட்",
+    "Early blight": "ஆரம்பகால ப்ளைட்",
+    "Powdery mildew": "பவுடரி மில்டெவ்",
+    "Bacterial spot": "பாக்டீரியா ஸ்பாட்",
+    "Leaf spot": "இலை புள்ளி",
+    "Apple scab": "ஆப்பிள் ஸ்கேப்",
+    "Black rot": "பிளாக் ராட்",
+    "Healthy": "ஆரோக்கியமான",
+}
+
+
+def localize_display_name(value, language):
+    if language != "ta" or not isinstance(value, str):
+        return value
+
+    normalized = value.strip()
+    for english_text, tamil_text in sorted(DISPLAY_NAME_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
+        if normalized.lower() == english_text.lower():
+            return tamil_text
+
+    for english_text, tamil_text in sorted(DISPLAY_NAME_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
+        if english_text.lower() in normalized.lower():
+            return normalized.replace(english_text, tamil_text)
+
+    return normalized
 
 
 def localize_text_for_language(value, language):
@@ -115,35 +169,37 @@ def localize_disease_payload(payload, language):
 
     disease = localized.get("disease", {})
     if isinstance(disease, dict):
+        disease["name"] = localize_display_name(disease.get("name"), language)
+        disease["crop_name"] = localize_display_name(disease.get("crop_name"), language)
         disease["description"] = localize_text_for_language(disease.get("description"), language)
 
     symptoms = localized.get("symptoms", [])
     for symptom in symptoms:
-        symptom["name"] = localize_text_for_language(symptom.get("name"), language)
+        symptom["name"] = localize_display_name(localize_text_for_language(symptom.get("name"), language), language)
         symptom["description"] = localize_text_for_language(symptom.get("description"), language)
 
     causes = localized.get("causes", [])
     for cause in causes:
-        cause["name"] = localize_text_for_language(cause.get("name"), language)
+        cause["name"] = localize_display_name(localize_text_for_language(cause.get("name"), language), language)
         cause["description"] = localize_text_for_language(cause.get("description"), language)
 
     treatments = localized.get("treatments", [])
     for treatment in treatments:
-        treatment["name"] = localize_text_for_language(treatment.get("name"), language)
-        treatment["type"] = localize_text_for_language(treatment.get("type"), language)
+        treatment["name"] = localize_display_name(localize_text_for_language(treatment.get("name"), language), language)
+        treatment["type"] = localize_display_name(localize_text_for_language(treatment.get("type"), language), language)
         treatment["description"] = localize_text_for_language(treatment.get("description"), language)
         treatment["instructions"] = localize_text_for_language(treatment.get("instructions"), language)
         treatment["precautions"] = localize_text_for_language(treatment.get("precautions"), language)
 
         for rate in treatment.get("application_rates", []):
-            rate["application_method"] = localize_text_for_language(rate.get("application_method"), language)
-            rate["measurement_unit"] = localize_text_for_language(rate.get("measurement_unit"), language)
-            rate["basis"] = localize_text_for_language(rate.get("basis"), language)
+            rate["application_method"] = localize_display_name(localize_text_for_language(rate.get("application_method"), language), language)
+            rate["measurement_unit"] = localize_display_name(localize_text_for_language(rate.get("measurement_unit"), language), language)
+            rate["basis"] = localize_display_name(localize_text_for_language(rate.get("basis"), language), language)
             rate["notes"] = localize_text_for_language(rate.get("notes"), language)
 
     prevention = localized.get("prevention", [])
     for item in prevention:
-        item["title"] = localize_text_for_language(item.get("title"), language)
+        item["title"] = localize_display_name(localize_text_for_language(item.get("title"), language), language)
         item["description"] = localize_text_for_language(item.get("description"), language)
 
     return localized
@@ -337,32 +393,32 @@ async def chat_with_plant_assistant(request: ChatRequest):
         return value.strip() if value else "Unknown"
 
     symptom_keywords = [
-        "symptom", "symptoms", "identify", "look for", "how do i know",
-        "அறிகுறி", "அறிகுறிகள்", "என்ன அறிகுறிகள்", "அறிகுறிகள் என்ன",
+        "symptom", "symptoms", "signs", "identify", "look for", "how do i know",
+        "அறிகுறி", "அறிகுறிகள்", "அடையாளம்", "என்ன அறிகுறிகள்", "அறிகுறிகள் என்ன", "எந்த அறிகுறிகள்", "எப்படி அறிகுறிகள்", "அறிகுறிகள் எப்படி",
     ]
     cause_keywords = [
-        "cause", "causes", "why did this happen", "what caused",
-        "காரணம்", "காரணங்கள்", "ஏன்", "ஏன் ஏற்பட்டது", "என்ன காரணம்",
+        "cause", "causes", "why did this happen", "what caused", "what causes this", "why is this happening", "how did this happen",
+        "காரணம்", "காரணங்கள்", "காரணம் என்ன", "என்ன காரணம்", "ஏன்", "ஏன் ஏற்பட்டது", "எப்படி ஏற்பட்டது", "என்ன காரணங்கள்",
     ]
     treatment_keywords = [
-        "treat", "treatment", "control this disease", "how can i manage", "what should i do",
-        "சிகிச்சை", "சிகிச்சை என்ன", "என்ன செய்ய வேண்டும்", "எப்படி நடத்துவது",
+        "treat", "treatment", "cure", "medicine", "medication", "control this disease", "how can i manage", "how to cure", "how to treat", "what should i do",
+        "சிகிச்சை", "சிகிச்சை என்ன", "எப்படி சிகிச்சை", "சிகிச்சை எப்படி", "குணப்படுத்த", "மருந்து", "மருந்து எப்படி", "கட்டுப்படுத்த", "என்ன செய்ய வேண்டும்", "எப்படி நடத்துவது", "எப்படி செய்வது",
     ]
     prevention_keywords = [
-        "prevent", "precaution", "stop it from spreading", "keep it from spreading",
-        "தடுப்பு", "தடுப்பது", "பரவாமல்", "பரவாமல் தடுக்க",
+        "prevent", "prevention", "precaution", "avoid", "stop it from spreading", "keep it from spreading",
+        "தடுப்பு", "தடுக்க", "தவிர்க்க", "தடுப்பது", "தடுப்பு எப்படி", "எப்படி தடுப்பது", "எப்படி பரவாமல்", "பரவாமல்", "பரவாமல் தடுக்க", "பரவாமல் இருப்பது", "தடுக்க எப்படி",
     ]
     acreage_keywords = [
-        "acre", "acres", "application rate", "dosage", "how much treatment", "how much should i apply", "per acre",
-        "ஏக்கர்", "ஏக்கர்களில்", "மருந்து அளவு", "எவ்வளவு", "எவ்வளவு மருந்து",
+        "acre", "acres", "quantity", "amount", "how much", "how many", "application rate", "dosage", "how much treatment", "how much should i apply", "per acre",
+        "ஏக்கர்", "ஏக்கர்களில்", "ஏக்கருக்கு", "அளவு", "எவ்வளவு", "தேவை", "மருந்து அளவு", "எவ்வளவு மருந்து", "மருந்து எவ்வளவு", "எவ்வளவு மருந்து வேண்டும்",
     ]
     disease_keywords = [
         "what disease", "detected disease", "what is the disease", "what disease is this", "what disease does my plant have", "what is this disease", "what disease is this plant",
-        "என்ன நோய்", "நோய் என்ன", "இந்த நோய்", "இது என்ன நோய்", "என்ன நோய் இது",
+        "என்ன நோய்", "நோய் என்ன", "இந்த நோய்", "இது என்ன நோய்", "என்ன நோய் இது", "நோய் எது", "இந்த நோய் என்ன", "எது நோய்",
     ]
     reliability_keywords = [
         "reliable", "trust", "accurate", "confidence", "sure",
-        "நம்பகமான", "நம்பிக்கை", "உறுதி", "துல்லியம்",
+        "நம்பகமான", "நம்பிக்கை", "உறுதி", "துல்லியம்", "நம்பகத்தன்மை", "நம்பகமானது",
     ]
 
     def ta_response(text: str) -> str:
@@ -431,6 +487,73 @@ async def chat_with_plant_assistant(request: ChatRequest):
                 response = f"The known causes for {disease_name} include: {cause_list}."
         return {"response": response, "context_used": True, "disease": disease_name}
 
+    if any(keyword in lower_message for keyword in acreage_keywords):
+        if disease_context is None:
+            if language == "ta":
+                response = "ஏக்கர் அடிப்படையில் சிகிச்சை அளவை கணக்கிடுவதற்கு தற்போதைய நோய் சூழல் தேவை. படத்தை பதிவேற்றவும் அல்லது நோயை குறிப்பிடவும்."
+            else:
+                response = "I need the current disease context to calculate acreage-based treatment requirements from the database. Please upload a plant image or specify the disease."
+            return {"response": response, "context_used": False, "disease": None}
+
+        acreage_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:acre|acres|ஏக்கர்|ஏக்கர்களில்|ஏக்கருக்கு)", lower_message)
+        acreage = float(acreage_match.group(1)) if acreage_match else None
+
+        if acreage is None:
+            if language == "ta":
+                response = "ஏக்கர் எண்ணை குறிப்பிடும்போது நான் சிகிச்சை அளவை கணக்கிட முடியும். உதாரணம்: '2 ஏக்கருக்கு எவ்வளவு மருந்து வேண்டும்?'"
+            else:
+                response = "I can calculate acreage-based treatment needs when you specify the affected area in acres. For example: 'How much treatment do I need for 2 acres?'."
+            return {"response": response, "context_used": True, "disease": disease_name}
+
+        area_rates = []
+        for row in disease_context["treatments"]:
+            if len(row) <= 6 or row[6] is None:
+                continue
+            rate_data = {
+                "id": row[6],
+                "application_method": row[7] if len(row) > 7 else None,
+                "measurement_unit": row[8] if len(row) > 8 else None,
+                "rate": float(row[9]) if len(row) > 9 and row[9] is not None else None,
+                "basis": row[10] if len(row) > 10 else None,
+                "notes": row[11] if len(row) > 11 else None,
+            }
+            if rate_data["rate"] is None:
+                continue
+            unit = (rate_data["measurement_unit"] or "").strip()
+            basis = (rate_data["basis"] or "").lower()
+            unit_lower = unit.lower()
+            if "acre" in basis or "/acre" in unit_lower or " per acre" in unit_lower or "acre" in unit_lower:
+                area_rates.append({
+                    "product": row[1],
+                    "rate": float(rate_data["rate"]),
+                    "unit": unit,
+                    "method": rate_data["application_method"],
+                    "basis": rate_data["basis"],
+                })
+
+        if not area_rates:
+            if language == "ta":
+                response = f"தற்போதைய அறிவு தளத்தில் {disease_name} நோய்க்கான ஏக்கர் அடிப்படையிலான பயன்பாட்டு வீதம் கிடைக்கவில்லை. நான் யூகிக்க மாட்டேன்; தற்போதைய தயாரிப்பு லேபிள் மற்றும் விவசாய வழிகாட்டல்களை சரிபார்க்கவும்."
+            else:
+                response = f"The current knowledge base does not include a usable acreage-based application rate for {disease_name}. I should not guess a rate. Please verify the current product label and applicable agricultural guidance."
+            return {"response": response, "context_used": True, "disease": disease_name}
+
+        selected = area_rates[0]
+        total_required = acreage * float(selected["rate"])
+        if language == "ta":
+            response = (
+                f"தற்போதைய தரவுத்தள வீதத்தின்படி {selected['product']} தயாரிப்புக்கு {selected['rate']} {selected['unit']} ஒரு ஏக்கருக்கு வீதம் உள்ளது. "
+                f"{acreage} ஏக்கருக்கு மதிப்பிடப்பட்ட மொத்த அளவு {total_required:.2f} {selected['unit']}. "
+                f"சிகிச்சையைப் பயன்படுத்துவதற்கு முன் தயாரிப்பு லேபிள் மற்றும் உள்ளூர் விவசாய வழிகாட்டல்களை எப்போதும் சரிபார்க்கவும்."
+            )
+        else:
+            response = (
+                f"Using the current database rate for {selected['product']}, the rate is {selected['rate']} {selected['unit']} per acre. "
+                f"For {acreage} acres, the estimated total is {total_required:.2f} {selected['unit']}. "
+                f"Always verify the current product label and local agricultural guidance before applying the treatment."
+            )
+        return {"response": response, "context_used": True, "disease": disease_name}
+
     if any(keyword in lower_message for keyword in treatment_keywords):
         if disease_context is None:
             if language == "ta":
@@ -473,74 +596,6 @@ async def chat_with_plant_assistant(request: ChatRequest):
                 response = f"{disease_name} நோய்க்கான தடுப்பு வழிமுறைகள்: {prevention_lines}."
             else:
                 response = f"Prevention guidance for {disease_name} includes: {prevention_lines}."
-        return {"response": response, "context_used": True, "disease": disease_name}
-
-    if any(keyword in lower_message for keyword in acreage_keywords):
-        if disease_context is None:
-            if language == "ta":
-                response = "ஏக்கர் அடிப்படையில் சிகிச்சை அளவை கணக்கிடுவதற்கு தற்போதைய நோய் சூழல் தேவை. படத்தை பதிவேற்றவும் அல்லது நோயை குறிப்பிடவும்."
-            else:
-                response = "I need the current disease context to calculate acreage-based treatment requirements from the database. Please upload a plant image or specify the disease."
-            return {"response": response, "context_used": False, "disease": None}
-
-        acreage_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:acre|acres)", lower_message)
-        acreage = float(acreage_match.group(1)) if acreage_match else None
-
-        if acreage is None:
-            if language == "ta":
-                response = "ஏக்கர் எண்ணை குறிப்பிடும்போது நான் சிகிச்சை அளவை கணக்கிட முடியும். உதாரணம்: '2 ஏக்கருக்கு எவ்வளவு மருந்து வேண்டும்?'"
-            else:
-                response = "I can calculate acreage-based treatment needs when you specify the affected area in acres. For example: 'How much treatment do I need for 2 acres?'."
-            return {"response": response, "context_used": True, "disease": disease_name}
-
-        area_rates = []
-        for row in disease_context["treatments"]:
-            if row[6] is None:
-                continue
-            application_rates = [{
-                "id": row[6],
-                "application_method": row[7],
-                "measurement_unit": row[8],
-                "rate": float(row[9]) if row[9] is not None else None,
-                "basis": row[10],
-                "notes": row[11],
-            }]
-            for rate_data in application_rates:
-                if rate_data["rate"] is None:
-                    continue
-                unit = (rate_data["measurement_unit"] or "").strip()
-                basis = (rate_data["basis"] or "").lower()
-                unit_lower = unit.lower()
-                if "acre" in basis or "/acre" in unit_lower or " per acre" in unit_lower or "acre" in unit_lower:
-                    area_rates.append({
-                        "product": row[1],
-                        "rate": float(rate_data["rate"]),
-                        "unit": unit,
-                        "method": rate_data["application_method"],
-                        "basis": rate_data["basis"],
-                    })
-
-        if not area_rates:
-            if language == "ta":
-                response = f"தற்போதைய அறிவு தளத்தில் {disease_name} நோய்க்கான ஏக்கர் அடிப்படையிலான பயன்பாட்டு வீதம் கிடைக்கவில்லை. நான் யூகிக்க மாட்டேன்; தற்போதைய தயாரிப்பு லேபிள் மற்றும் விவசாய வழிகாட்டல்களை சரிபார்க்கவும்."
-            else:
-                response = f"The current knowledge base does not include a usable acreage-based application rate for {disease_name}. I should not guess a rate. Please verify the current product label and applicable agricultural guidance."
-            return {"response": response, "context_used": True, "disease": disease_name}
-
-        selected = area_rates[0]
-        total_required = acreage * float(selected["rate"])
-        if language == "ta":
-            response = (
-                f"தற்போதைய தரவுத்தள வீதத்தின்படி {selected['product']} தயாரிப்புக்கு {selected['rate']} {selected['unit']} ஒரு ஏக்கருக்கு வீதம் உள்ளது. "
-                f"{acreage} ஏக்கருக்கு மதிப்பிடப்பட்ட மொத்த அளவு {total_required:.2f} {selected['unit']}. "
-                f"சிகிச்சையைப் பயன்படுத்துவதற்கு முன் தயாரிப்பு லேபிள் மற்றும் உள்ளூர் விவசாய வழிகாட்டல்களை எப்போதும் சரிபார்க்கவும்."
-            )
-        else:
-            response = (
-                f"Using the current database rate for {selected['product']}, the rate is {selected['rate']} {selected['unit']} per acre. "
-                f"For {acreage} acres, the estimated total is {total_required:.2f} {selected['unit']}. "
-                f"Always verify the current product label and local agricultural guidance before applying the treatment."
-            )
         return {"response": response, "context_used": True, "disease": disease_name}
 
     if any(keyword in lower_message for keyword in reliability_keywords):
