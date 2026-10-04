@@ -807,7 +807,7 @@ export default function Home() {
     setNotificationsError("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/notifications", {
+      const response = await fetch("https://plantguard-ai-kcdu.onrender.com/api/notifications", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -870,7 +870,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/upload",
+        "https://plantguard-ai-kcdu.onrender.com/api/upload",
         {
           method: "POST",
           body: formData,
@@ -1052,7 +1052,7 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+      const response = await fetch("https://plantguard-ai-kcdu.onrender.com/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
