@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,19 +10,31 @@ from services.database_service import (
     get_disease_details
 )
 
-app = FastAPI()
+app = FastAPI(title="Plant Guard AI API", version="2.0.0")
 
 
 # --------------------------------------------------
 # CORS CONFIGURATION
 # --------------------------------------------------
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "")
+configured_origins = [
+    origin.strip()
+    for origin in cors_origins_env.split(",")
+    if origin.strip()
+]
+if "*" in configured_origins:
+    raise RuntimeError("CORS_ORIGINS must list explicit origins; wildcard origins are not supported.")
+
+allowed_origins = list(dict.fromkeys([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    *configured_origins,
+]))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

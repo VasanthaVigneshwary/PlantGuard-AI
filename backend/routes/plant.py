@@ -1,19 +1,24 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel, Field
-import os
-import shutil
+import logging
 import re
-
+import io
+import tempfile
+from pathlib import Path
+from PIL import Image
 from ml.predict import predict_disease
 from services.database_service import (
     get_disease_details_by_prediction,
     get_disease_details,
     get_disease_by_name,
     get_notifications as get_notification_records,
+    save_prediction,
+    get_prediction_history,
 )
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -61,6 +66,10 @@ TAMIL_TEXT_MAP = {
     "Source": "ஆதாரம்",
     "Source: TNAU Agritech Portal. Verify current product label and local approval before use.": "ஆதாரம்: TNAU Agritech Portal. பயன்பாட்டுக்கு முன் தற்போதைய தயாரிப்பு லேபிள் மற்றும் உள்ளூர் ஒப்புதலைச் சரிபார்க்கவும்.",
     "Plant image analyzed successfully 🌱": "தாவர படம் வெற்றிகரமாக பகுப்பாய்வு செய்யப்பட்டது 🌱",
+    "Uncalibrated model score": "அளவுத்திருத்தம் செய்யப்படாத மாதிரி மதிப்பெண்",
+    "This model score is not a calibrated probability, and unsupported images may still receive a class prediction. Treat the result as a candidate and verify it using plant symptoms or qualified agricultural guidance.": "இந்த மாதிரி மதிப்பெண் அளவுத்திருத்தம் செய்யப்பட்ட நிகழ்தகவு அல்ல; ஆதரிக்கப்படாத படங்களுக்கும் ஒரு வகுப்பு கணிப்பை வழங்கலாம். இந்த முடிவை சாத்தியமான குறியீடாகக் கருதி, தாவர அறிகுறிகள் அல்லது தகுதியான விவசாய வழிகாட்டுதலின் மூலம் சரிபார்க்கவும்.",
+    "The image has little visual contrast or leaf detail. Please provide a clear, well-lit photo of a plant leaf. The model score is not calibrated.": "படத்தில் தெளிவான நிற வேறுபாடோ இலை விவரமோ போதவில்லை. நல்ல வெளிச்சத்தில் எடுக்கப்பட்ட தெளிவான இலைப் படத்தை வழங்கவும். மாதிரி மதிப்பெண் அளவுத்திருத்தம் செய்யப்படவில்லை.",
+    "The image was analyzed, but prediction history could not be saved.": "படம் பகுப்பாய்வு செய்யப்பட்டது; ஆனால் கணிப்பு வரலாற்றைச் சேமிக்க முடியவில்லை.",
     "No major disease symptoms were detected by the model.": "மாடல் எந்த முக்கிய நோய் அறிகுறிகளையும் கண்டறியவில்லை.",
     "Continue monitoring the plant regularly.": "தாவரத்தை தொடர்ந்து கண்காணிக்கவும்.",
     "No disease treatment is currently required based on this prediction.": "இந்த கணிப்பின் அடிப்படையில் தற்போது நோய் சிகிச்சை தேவையில்லை.",
@@ -121,14 +130,72 @@ TAMIL_TEXT_MAP = {
 DISPLAY_NAME_TRANSLATIONS = {
     "Tomato": "தக்காளி",
     "Tomato Late Blight": "தக்காளி லேட் ப்ளைட்",
+    "Tomato Early Blight": "தக்காளி ஆரம்பகால ப்ளைட்",
+    "Tomato Leaf Mold": "தக்காளி இலை பூஞ்சை",
+    "Tomato Septoria Leaf Spot": "தக்காளி செப்டோரியா இலைப்புள்ளி",
+    "Tomato Spider Mites": "தக்காளி சிலந்தி பேன் தாக்குதல்",
+    "Tomato Target Spot": "தக்காளி டார்கெட் புள்ளி",
+    "Tomato Yellow Leaf Curl Virus": "தக்காளி மஞ்சள் இலை சுருள் வைரஸ்",
+    "Tomato Mosaic Virus": "தக்காளி மொசைக் வைரஸ்",
+    "Tomato Healthy": "தக்காளி ஆரோக்கியமானது",
+    "Potato": "உருளைக்கிழங்கு",
+    "Potato Late Blight": "உருளைக்கிழங்கு லேட் ப்ளைட்",
+    "Potato Early Blight": "உருளைக்கிழங்கு ஆரம்பகால ப்ளைட்",
+    "Potato Healthy": "உருளைக்கிழங்கு ஆரோக்கியமானது",
+    "Apple": "ஆப்பிள்",
+    "Apple Scab": "ஆப்பிள் ஸ்கேப் புள்ளி",
+    "Apple Black Rot": "ஆப்பிள் பிளாக் ராட் அழுகல்",
+    "Cedar Apple Rust": "சிடார் ஆப்பிள் துரு நோய்",
+    "Apple Healthy": "ஆப்பிள் ஆரோக்கியமானது",
+    "Blueberry": "புளூபெர்ரி",
+    "Blueberry Healthy": "புளூபெர்ரி ஆரோக்கியமானது",
+    "Cherry": "செர்ரி",
+    "Cherry Powdery Mildew": "செர்ரி பவுடரி மில்டெவ்",
+    "Cherry Healthy": "செர்ரி ஆரோக்கியமானது",
+    "Corn": "சோளம்",
+    "Corn Gray Leaf Spot": "சோளம் சாம்பல் இலைப்புள்ளி",
+    "Corn Common Rust": "சோளம் பொதுவான துரு நோய்",
+    "Corn Northern Leaf Blight": "சோளம் வடக்கு இலை கருகல்",
+    "Corn Healthy": "சோளம் ஆரோக்கியமானது",
+    "Grape": "திராட்சை",
+    "Grape Black Rot": "திராட்சை கருப்பு அழுகல்",
+    "Grape Esca (Black Measles)": "திராட்சை எஸ்கா தண்டு நோய்",
+    "Grape Leaf Blight": "திராட்சை இலை கருகல்",
+    "Grape Healthy": "திராட்சை ஆரோக்கியமானது",
+    "Orange": "ஆரஞ்சு",
+    "Citrus Greening (Huanglongbing)": "சிட்ரஸ் கிரீனிங் நோய்",
+    "Peach": "பீச்",
+    "Peach Bacterial Spot": "பீச் பாக்டீரியா புள்ளி",
+    "Peach Healthy": "பீச் ஆரோக்கியமானது",
+    "Pepper, Bell": "குடைமிளகாய்",
+    "Pepper Bell Bacterial Spot": "குடைமிளகாய் பாக்டீரியா புள்ளி",
+    "Pepper Bell Healthy": "குடைமிளகாய் ஆரோக்கியமானது",
+    "Raspberry": "ராஸ்பெர்ரி",
+    "Raspberry Healthy": "ராஸ்பெர்ரி ஆரோக்கியமானது",
+    "Soybean": "சோயாபீன்",
+    "Soybean Healthy": "சோயாபீன் ஆரோக்கியமானது",
+    "Squash": "பூசணி",
+    "Squash Powdery Mildew": "பூசணி சாம்பல் நோய்",
+    "Strawberry": "ஸ்ட்ராபெர்ரி",
+    "Strawberry Leaf Scorch": "ஸ்ட்ராபெர்ரி இலை கருகல்",
+    "Strawberry Healthy": "ஸ்ட்ராபெர்ரி ஆரோக்கியமானது",
+    "Rice": "நெல்",
+    "Rice Blast": "நெல் குலை நோய்",
+    "Rice Brown Spot": "நெல் பழுப்பு புள்ளி",
+    "Cotton": "பருத்தி",
+    "Cotton Leaf Curl Disease": "பருத்தி இலை சுருள் நோய்",
+    "Cotton Bacterial Blight": "பருத்தி பாக்டீரியா கருகல்",
+    "Chilli": "மிளகாய்",
+    "Chilli Anthracnose": "மிளகாய் ஆந்த்ராக்னோஸ்",
+    "Chilli Leaf Curl Disease": "மிளகாய் இலை சுருள் நோய்",
     "Late blight": "லேட் ப்ளைட்",
     "Early blight": "ஆரம்பகால ப்ளைட்",
     "Powdery mildew": "பவுடரி மில்டெவ்",
     "Bacterial spot": "பாக்டீரியா ஸ்பாட்",
     "Leaf spot": "இலை புள்ளி",
     "Apple scab": "ஆப்பிள் ஸ்கேப்",
-    "Black rot": "பிளாக் ராட்",
-    "Healthy": "ஆரோக்கியமான",
+    "Black rot": "கருப்பு அழுகல்",
+    "Healthy": "ஆரோக்கியமானது",
 }
 
 
@@ -166,6 +233,9 @@ def localize_disease_payload(payload, language):
 
     localized = payload.copy()
     localized["message"] = localize_text_for_language(payload.get("message"), language)
+    localized["status"] = localize_text_for_language(payload.get("status"), language)
+    localized["uncertainty_warning"] = localize_text_for_language(payload.get("uncertainty_warning"), language)
+    localized["history_warning"] = localize_text_for_language(payload.get("history_warning"), language)
 
     disease = localized.get("disease", {})
     if isinstance(disease, dict):
@@ -227,6 +297,17 @@ def get_notifications_endpoint():
     }
 
 
+@router.get("/history")
+def get_history_endpoint(limit: int = 20):
+    """Retrieve recent plant diagnosis history from PostgreSQL."""
+    history = get_prediction_history(limit=limit)
+
+    return {
+        "count": len(history),
+        "history": history,
+    }
+
+
 # --------------------------------------------------
 # PLANT IMAGE UPLOAD + AI PREDICTION
 # --------------------------------------------------
@@ -236,129 +317,180 @@ async def upload_plant_image(
     file: UploadFile = File(...),
     language: str | None = Form("en"),
 ):
-
-    # Check file type
-    allowed_extensions = [".jpg", ".jpeg", ".png", ".webp"]
-
-    file_extension = os.path.splitext(file.filename)[1].lower()
-
-    if file_extension not in allowed_extensions:
-
+    # Read at most the limit plus one byte so a large request is not loaded whole.
+    max_upload_bytes = 10 * 1024 * 1024
+    contents = await file.read(max_upload_bytes + 1)
+    if not contents:
         raise HTTPException(
             status_code=400,
-            detail="Only JPG, JPEG, PNG and WEBP images are allowed."
+            detail="The uploaded file is empty. Please select a valid plant leaf image."
         )
 
-
-    # Create uploads folder if it doesn't exist
-    upload_folder = "uploads"
-
-    os.makedirs(upload_folder, exist_ok=True)
-
-
-    # Create safe filename
-    file_path = os.path.join(
-        upload_folder,
-        file.filename
-    )
-
-
-    # Save uploaded image
-    with open(file_path, "wb") as buffer:
-
-        shutil.copyfileobj(
-            file.file,
-            buffer
+    if len(contents) > max_upload_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="File size exceeds the 10MB limit. Please upload a smaller image."
         )
 
-
-    # Run AI prediction
+    # Validate actual image content; do not trust the filename or MIME header.
     try:
+        image_stream = io.BytesIO(contents)
+        with Image.open(image_stream) as img:
+            img_format = (img.format or "").upper()
+            if img_format not in {"JPEG", "JPG", "PNG", "WEBP"}:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported image format ({img_format}). Only JPG, JPEG, PNG, and WEBP images are allowed."
+                )
+            width, height = img.size
+            if width < 32 or height < 32:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Image resolution is too low for reliable leaf disease diagnosis."
+                )
+            if width * height > 40_000_000:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Image dimensions are too large. Please upload a smaller image."
+                )
+            img.verify()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is not a valid, readable image. Please choose a JPG, PNG, or WEBP photo."
+        )
+
+    # 2. Use a generated temporary name and always remove the upload after inference.
+    upload_folder = Path(__file__).resolve().parents[1] / "uploads"
+    upload_folder.mkdir(parents=True, exist_ok=True)
+    file_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix="upload_", suffix=".img", dir=upload_folder, delete=False
+        ) as buffer:
+            file_path = Path(buffer.name)
+            buffer.write(contents)
+
         result = predict_disease(file_path)
-
-    except Exception as e:
-
+    except Exception as exc:
+        logger.exception("Plant image inference failed")
         raise HTTPException(
             status_code=500,
-            detail=f"AI prediction failed: {str(e)}"
-        )
+            detail="The model could not analyze this image. Please try another clear leaf photo."
+        ) from exc
+    finally:
+        if file_path is not None:
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove temporary plant image")
 
-    disease_data = get_disease_details_by_prediction(result["disease"])
-
-    if disease_data is None:
+    # 4. Lookup database record for the predicted class
+    try:
+        disease_data = get_disease_details_by_prediction(result["disease"])
+    except Exception as exc:
+        logger.exception("Plant disease knowledge lookup failed")
         raise HTTPException(
-            status_code=404,
-            detail=(
-                "No knowledge-base disease record found for prediction: "
-                f"{result['disease']}"
-            )
+            status_code=503,
+            detail="The plant knowledge database is unavailable. Please try again later."
+        ) from exc
+
+    if disease_data is not None:
+        disease = disease_data["disease"]
+        disease_id = disease[0]
+        disease_name = disease[1]
+        crop_name = disease[2]
+        description = disease[3]
+
+        treatments = {}
+        for row in disease_data["treatments"]:
+            treatment_id = row[0]
+            if treatment_id not in treatments:
+                treatments[treatment_id] = {
+                    "id": row[0],
+                    "name": row[1],
+                    "type": row[2],
+                    "description": row[3],
+                    "instructions": row[4],
+                    "precautions": row[5],
+                    "application_rates": []
+                }
+
+            if len(row) > 6 and row[6] is not None:
+                treatments[treatment_id]["application_rates"].append({
+                    "id": row[6],
+                    "application_method": row[7] if len(row) > 7 else None,
+                    "measurement_unit": row[8] if len(row) > 8 else None,
+                    "rate": float(row[9]) if len(row) > 9 and row[9] is not None else None,
+                    "basis": row[10] if len(row) > 10 else None,
+                    "notes": row[11] if len(row) > 11 else None
+                })
+
+        symptoms_list = [
+            {"id": s[0], "name": s[1], "description": s[2]}
+            for s in disease_data["symptoms"]
+        ]
+        causes_list = [
+            {"id": c[0], "name": c[1], "description": c[2]}
+            for c in disease_data["causes"]
+        ]
+        prevention_list = [
+            {"id": p[0], "title": p[1], "description": p[2]}
+            for p in disease_data["prevention"]
+        ]
+    else:
+        # Honest fallback if a class is not yet monograph-seeded
+        disease_id = None
+        disease_name = result["condition"]
+        crop_name = result["crop"]
+        description = None
+        treatments = {}
+        symptoms_list = []
+        causes_list = []
+        prevention_list = []
+
+    # 5. Persist prediction history to PostgreSQL
+    prediction_id = None
+    history_warning = None
+    try:
+        prediction_id = save_prediction(
+            crop_id=None,
+            crop_name=crop_name,
+            disease_id=disease_id,
+            confidence=result["confidence"],
+            image_url=None,
+            model_version="efficientnet_v2_s"
         )
-
-    disease = disease_data["disease"]
-    treatments = {}
-
-    for row in disease_data["treatments"]:
-        treatment_id = row[0]
-
-        if treatment_id not in treatments:
-            treatments[treatment_id] = {
-                "id": row[0],
-                "name": row[1],
-                "type": row[2],
-                "description": row[3],
-                "instructions": row[4],
-                "precautions": row[5],
-                "application_rates": []
-            }
-
-        if len(row) > 6 and row[6] is not None:
-            treatments[treatment_id]["application_rates"].append({
-                "id": row[6],
-                "application_method": row[7] if len(row) > 7 else None,
-                "measurement_unit": row[8] if len(row) > 8 else None,
-                "rate": float(row[9]) if len(row) > 9 and row[9] is not None else None,
-                "basis": row[10] if len(row) > 10 else None,
-                "notes": row[11] if len(row) > 11 else None
-            })
+    except Exception:
+        logger.exception("Prediction history could not be saved")
+        history_warning = "The image was analyzed, but prediction history could not be saved."
 
     normalized_language = normalize_language(language)
     response = {
         "message": "Plant image analyzed successfully 🌱",
-        "filename": file.filename,
+        "filename": re.split(r"[/\\]", file.filename or "")[-1],
         "prediction": result["disease"],
         "confidence": result["confidence"],
         "status": result["status"],
+        "uncertainty_warning": result.get("uncertainty_warning"),
+        "is_healthy": result.get("is_healthy", False),
+        "prediction_id": prediction_id,
+        "history_saved": prediction_id is not None,
+        "history_warning": history_warning,
+        "top_predictions": result.get("top_predictions", []),
         "disease": {
-            "id": disease[0],
-            "name": disease[1],
-            "crop_name": disease[2],
-            "description": disease[3]
+            "id": disease_id,
+            "name": disease_name,
+            "crop_name": crop_name,
+            "description": description
         },
-        "symptoms": [
-            {
-                "id": symptom[0],
-                "name": symptom[1],
-                "description": symptom[2]
-            }
-            for symptom in disease_data["symptoms"]
-        ],
-        "causes": [
-            {
-                "id": cause[0],
-                "name": cause[1],
-                "description": cause[2]
-            }
-            for cause in disease_data["causes"]
-        ],
+        "symptoms": symptoms_list,
+        "causes": causes_list,
         "treatments": list(treatments.values()),
-        "prevention": [
-            {
-                "id": item[0],
-                "title": item[1],
-                "description": item[2]
-            }
-            for item in disease_data["prevention"]
-        ]
+        "prevention": prevention_list
     }
 
     return localize_disease_payload(response, normalized_language)

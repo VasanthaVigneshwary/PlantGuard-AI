@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 interface PredictionResult {
   message?: string;
@@ -8,11 +10,15 @@ interface PredictionResult {
   prediction: string;
   confidence: number;
   status?: string;
+  uncertainty_warning?: string | null;
+  is_healthy?: boolean;
+  history_saved?: boolean;
+  history_warning?: string | null;
   disease: {
-    id: number;
+    id: number | null;
     name: string;
     crop_name: string;
-    description: string;
+    description: string | null;
   };
   symptoms: {
     id: number;
@@ -47,15 +53,18 @@ interface PredictionResult {
   }[];
 }
 
-interface LegacyDiseaseInfo {
-  about: string;
-  symptoms: string[];
-  treatment: string[];
-  prevention: string[];
+interface HistoryItem {
+  id: number;
+  confidence: number | null;
+  created_at: string | null;
+  crop_name: string;
+  disease_name: string;
+  disease_id: number | null;
+  model_version: string | null;
 }
 
 interface DatabaseDiseaseInfo {
-  about: string;
+  about: string | null;
   symptoms: PredictionResult["symptoms"];
   causes: PredictionResult["causes"];
   treatment: PredictionResult["treatments"];
@@ -102,6 +111,13 @@ const translations: Record<Language, Record<string, string>> = {
     navDetect: "Detect",
     navHow: "How It Works",
     navAbout: "About",
+    navHistory: "History",
+    historyTitle: "Prediction History",
+    historySubtitle: "Saved model results from PostgreSQL. Uploaded images are not retained.",
+    historyLoading: "Loading prediction history...",
+    historyEmpty: "No saved predictions yet.",
+    historyError: "Unable to load prediction history.",
+    retry: "Retry",
     notifications: "Notifications",
     notificationsSubtitle: "Plant health updates",
     notificationsLoading: "Loading notifications...",
@@ -124,10 +140,10 @@ const translations: Record<Language, Record<string, string>> = {
     plantHealthScanner: "Plant Health Scanner",
     aiAnalysis: "AI Analysis",
     aiModel: "AI Model",
-    confidence: "Confidence",
+    confidence: "Model Score",
     guidance: "Guidance",
     detectedCondition: "Detected Condition",
-    modelConfidence: "Model Confidence",
+    modelConfidence: "Raw Model Score (Not Calibrated)",
     whatDoesThisMean: "What does this result mean?",
     aboutCondition: "About This Condition",
     commonSymptoms: "Common Symptoms",
@@ -148,7 +164,7 @@ const translations: Record<Language, Record<string, string>> = {
     getGuidance: "Get Guidance",
     keyFeatures: "Key Features",
     aiDetection: "AI Detection",
-    confidenceScore: "Confidence Score",
+    confidenceScore: "Raw Model Score",
     plantGuidance: "Plant Guidance",
     aiAssistant: "AI Assistant",
     aboutProject: "About The Project",
@@ -229,6 +245,13 @@ const translations: Record<Language, Record<string, string>> = {
     navDetect: "கண்டறிதல்",
     navHow: "இது எப்படி வேலை செய்கிறது",
     navAbout: "பற்றி",
+    navHistory: "வரலாறு",
+    historyTitle: "கணிப்பு வரலாறு",
+    historySubtitle: "PostgreSQL-இல் சேமிக்கப்பட்ட மாதிரி முடிவுகள். பதிவேற்றிய படங்கள் சேமிக்கப்படுவதில்லை.",
+    historyLoading: "கணிப்பு வரலாறு ஏற்றப்படுகிறது...",
+    historyEmpty: "சேமிக்கப்பட்ட கணிப்புகள் எதுவும் இல்லை.",
+    historyError: "கணிப்பு வரலாற்றை ஏற்ற முடியவில்லை.",
+    retry: "மீண்டும் முயற்சி",
     notifications: "அறிவிப்புகள்",
     notificationsSubtitle: "தாவர ஆரோக்கிய புதுப்பிப்புகள்",
     notificationsLoading: "அறிவிப்புகள் ஏற்றப்படுகின்றன...",
@@ -251,10 +274,10 @@ const translations: Record<Language, Record<string, string>> = {
     plantHealthScanner: "தாவர ஆரோக்கிய ஸ்கேனர்",
     aiAnalysis: "AI பகுப்பாய்வு",
     aiModel: "AI மாதிரி",
-    confidence: "நம்பகத்தன்மை",
+    confidence: "மாதிரி மதிப்பெண்",
     guidance: "வழிகாட்டல்",
     detectedCondition: "கண்டறியப்பட்ட நிலை",
-    modelConfidence: "மாதிரி நம்பகத்தன்மை",
+    modelConfidence: "மாதிரியின் மூல மதிப்பெண் (அளவுத்திருத்தம் செய்யப்படவில்லை)",
     whatDoesThisMean: "இந்த முடிவு அர்த்தப்படுத்துவது எது?",
     aboutCondition: "இந்த நிலை பற்றிய தகவல்",
     commonSymptoms: "பொதுவான அறிகுறிகள்",
@@ -275,7 +298,7 @@ const translations: Record<Language, Record<string, string>> = {
     getGuidance: "வழிகாட்டலைப் பெறுக",
     keyFeatures: "முக்கிய அம்சங்கள்",
     aiDetection: "AI கண்டறிதல்",
-    confidenceScore: "நம்பகத்தன்மை மதிப்பெண்",
+    confidenceScore: "மாதிரியின் மூல மதிப்பெண்",
     plantGuidance: "தாவர வழிகாட்டல்",
     aiAssistant: "AI உதவியாளர்",
     aboutProject: "திட்டம் பற்றி",
@@ -408,204 +431,6 @@ function getRateBasisType(measurementUnit: string, basis: string) {
   return "unknown";
 }
 
-function formatDiseaseName(prediction: string) {
-  const parts = prediction.split("___");
-
-  if (parts.length !== 2) {
-    return {
-      plant: "Unknown Plant",
-      disease: prediction.replaceAll("_", " ").trim(),
-    };
-  }
-
-  return {
-    plant: parts[0].replaceAll("_", " ").trim(),
-    disease: parts[1].replaceAll("_", " ").trim(),
-  };
-}
-
-function getDiseaseInfo(disease: string): LegacyDiseaseInfo {
-  const lower = disease.toLowerCase();
-
-  if (lower.includes("late blight")) {
-    return {
-      about:
-        "Late blight is a plant disease that can spread quickly, especially in cool and humid conditions.",
-      symptoms: [
-        "Dark or brown spots on leaves.",
-        "Leaves may become weak and die.",
-        "Disease may spread rapidly.",
-      ],
-      treatment: [
-        "Remove severely affected leaves.",
-        "Avoid watering directly over leaves.",
-        "Improve air circulation.",
-        "Follow the label instructions of suitable plant protection products.",
-      ],
-      prevention: [
-        "Maintain proper spacing between plants.",
-        "Keep leaves as dry as possible.",
-        "Remove infected plant material.",
-      ],
-    };
-  }
-
-  if (lower.includes("early blight")) {
-    return {
-      about:
-        "Early blight is a common fungal disease that can affect leaves and reduce plant growth.",
-      symptoms: [
-        "Small dark spots on older leaves.",
-        "Spots may become larger.",
-        "Leaves may turn yellow and fall.",
-      ],
-      treatment: [
-        "Remove severely affected leaves.",
-        "Keep the growing area clean.",
-        "Avoid overhead watering.",
-        "Use suitable treatment according to the product label.",
-      ],
-      prevention: [
-        "Provide good plant spacing.",
-        "Remove fallen infected leaves.",
-        "Avoid prolonged leaf wetness.",
-      ],
-    };
-  }
-
-  if (lower.includes("powdery mildew")) {
-    return {
-      about:
-        "Powdery mildew commonly appears as a white powder-like coating on plant leaves.",
-      symptoms: [
-        "White powder-like patches on leaves.",
-        "Leaves may become distorted.",
-        "Plant growth may become weaker.",
-      ],
-      treatment: [
-        "Remove heavily infected leaves.",
-        "Improve air circulation.",
-        "Avoid excessive humidity.",
-        "Use appropriate treatment according to the product label.",
-      ],
-      prevention: [
-        "Give plants enough space.",
-        "Avoid excessive watering.",
-        "Keep the growing area clean.",
-      ],
-    };
-  }
-
-  if (lower.includes("bacterial spot")) {
-    return {
-      about:
-        "Bacterial spot can cause dark or water-soaked spots on leaves and may reduce plant health.",
-      symptoms: [
-        "Small dark spots on leaves.",
-        "Spots may enlarge.",
-        "Affected leaves may become damaged.",
-      ],
-      treatment: [
-        "Remove severely affected plant parts.",
-        "Avoid handling plants when leaves are wet.",
-        "Improve air circulation.",
-        "Follow local agricultural guidance.",
-      ],
-      prevention: [
-        "Use clean planting material.",
-        "Avoid unnecessary leaf wetting.",
-        "Remove infected plant debris.",
-      ],
-    };
-  }
-
-  if (lower.includes("apple scab")) {
-    return {
-      about:
-        "Apple scab is a fungal disease that commonly affects apple leaves and fruit.",
-      symptoms: [
-        "Olive or dark spots on leaves.",
-        "Leaves may become distorted.",
-        "Fruit may develop rough or scabby areas.",
-      ],
-      treatment: [
-        "Remove heavily infected leaves.",
-        "Remove fallen infected plant material.",
-        "Improve air circulation.",
-        "Follow suitable agricultural treatment guidance.",
-      ],
-      prevention: [
-        "Keep the growing area clean.",
-        "Remove fallen leaves.",
-        "Maintain good airflow around the plant.",
-      ],
-    };
-  }
-
-  if (lower.includes("black rot")) {
-    return {
-      about:
-        "Black rot can cause dark lesions and deterioration of plant tissue.",
-      symptoms: [
-        "Dark lesions on leaves.",
-        "Yellowing around affected areas.",
-        "Plant tissue may gradually deteriorate.",
-      ],
-      treatment: [
-        "Remove infected plant parts.",
-        "Dispose of infected material safely.",
-        "Improve air circulation.",
-        "Follow appropriate agricultural guidance.",
-      ],
-      prevention: [
-        "Keep plants healthy and well spaced.",
-        "Remove infected debris.",
-        "Avoid prolonged moisture on leaves.",
-      ],
-    };
-  }
-
-  if (lower.includes("healthy")) {
-    return {
-      about:
-        "The AI model did not detect a known disease in the uploaded plant image.",
-      symptoms: [
-        "No major disease symptoms were detected by the model.",
-        "Continue monitoring the plant regularly.",
-      ],
-      treatment: [
-        "No disease treatment is currently required based on this prediction.",
-        "Continue regular plant care and monitoring.",
-      ],
-      prevention: [
-        "Provide sufficient water and nutrients.",
-        "Maintain good air circulation.",
-        "Regularly inspect leaves.",
-      ],
-    };
-  }
-
-  return {
-    about:
-      "The AI model detected a possible plant disease. This result should be treated as an AI-based indication rather than a confirmed diagnosis.",
-    symptoms: [
-      "Symptoms may vary depending on the plant and disease.",
-      "Inspect affected leaves carefully.",
-    ],
-    treatment: [
-      "Remove severely affected plant parts when appropriate.",
-      "Maintain good air circulation.",
-      "Avoid unnecessary leaf wetting.",
-      "Follow product labels and local agricultural recommendations.",
-    ],
-    prevention: [
-      "Keep the growing area clean.",
-      "Monitor plants regularly.",
-      "Remove infected plant material when appropriate.",
-    ],
-  };
-}
-
 function getLocalizedDisplayName(value: string | undefined, language: Language) {
   if (!value) {
     return value ?? "";
@@ -645,50 +470,6 @@ function getLocalizedDisplayName(value: string | undefined, language: Language) 
   return normalized;
 }
 
-function getExplanation(disease: string, language: Language) {
-  const lower = disease.toLowerCase();
-
-  if (lower.includes("healthy")) {
-    return language === "ta"
-      ? "AI மாடல் இந்த தாவரப் படத்தில் அறியப்பட்ட நோயைக் கண்டறியவில்லை."
-      : "The AI model did not detect a known disease in this plant image.";
-  }
-
-  if (lower.includes("late blight")) {
-    return language === "ta"
-      ? "குளிர்ச்சியான மற்றும் அதிக ஈரப்பதம் கொண்ட சூழ்நிலைகளில் லேட் ப்ளைட் நோய் வேகமாகப் பரவக்கூடும். ஆரம்பத்திலேயே கவனித்து, சரியான தாவர பராமரிப்பை மேற்கொள்வது நோய் மேலும் பரவுவதை குறைக்க உதவும்."
-      : "Late blight can spread quickly under cool and humid conditions. Early observation and proper plant care can help reduce further spread.";
-  }
-
-  if (lower.includes("early blight")) {
-    return language === "ta"
-      ? "ஆரம்பகால ப்ளைட் நோய் இலைகளில் கருமையான புள்ளிகளை உருவாக்கி, நிலைமை முன்னேறும்போது தாவர வளர்ச்சியைக் குறைக்கலாம்."
-      : "Early blight can cause dark spots on leaves and may reduce plant growth if the condition progresses.";
-  }
-
-  if (lower.includes("powdery mildew")) {
-    return language === "ta"
-      ? "பவுடரி மில்டெவ் பொதுவாக இலைகளில் வெள்ளை தூள் போன்ற பூச்சாகத் தோன்றி, தாவர வளர்ச்சியை பாதிக்கலாம்."
-      : "Powdery mildew commonly appears as a white powder-like coating on leaves and can affect plant growth.";
-  }
-
-  if (lower.includes("bacterial spot")) {
-    return language === "ta"
-      ? "பாக்டீரியா ஸ்பாட் நோய் இலைகளில் சிறிய கருமையான அல்லது நீர் நிறைந்த புள்ளிகளை ஏற்படுத்தி, தாவர திசுக்களைக் காயப்படுத்தலாம்."
-      : "Bacterial spot can cause small dark or water-soaked spots on leaves and may damage plant tissue.";
-  }
-
-  if (lower.includes("leaf spot")) {
-    return language === "ta"
-      ? "இலை புள்ளி நோய்கள் இலைகளில் தெரியும் புள்ளிகள் அல்லது சேதத்தை உருவாக்கலாம்."
-      : "Leaf spot diseases can create visible spots or damaged areas on plant leaves.";
-  }
-
-  return language === "ta"
-    ? "AI மாடல் சாத்தியமான தாவர நோயைக் கண்டறிந்துள்ளது. மேலும் கவனிப்பு மற்றும் நிபுணர் சரிபார்ப்பு பயனுள்ளதாக இருக்கும்."
-    : "The AI model detected a possible plant disease. Further observation and expert verification may be useful.";
-}
-
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -703,6 +484,9 @@ export default function Home() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -727,6 +511,55 @@ export default function Home() {
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
   const t = translations[language];
+
+  const refreshHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "History request failed");
+      }
+      setHistory(Array.isArray(data.history) ? data.history : []);
+      setHistoryError(false);
+    } catch {
+      setHistory([]);
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/api/history`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || "History request failed");
+        }
+        return data;
+      })
+      .then((data) => {
+        if (active) {
+          setHistory(Array.isArray(data.history) ? data.history : []);
+          setHistoryError(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setHistory([]);
+          setHistoryError(true);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setHistoryLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem("plant-guard-language", language);
@@ -807,7 +640,7 @@ export default function Home() {
     setNotificationsError("");
 
     try {
-      const response = await fetch("https://plantguard-ai-kcdu.onrender.com/api/notifications", {
+      const response = await fetch(`${API_BASE_URL}/api/notifications`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -870,7 +703,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        "https://plantguard-ai-kcdu.onrender.com/api/upload",
+        `${API_BASE_URL}/api/upload`,
         {
           method: "POST",
           body: formData,
@@ -888,6 +721,10 @@ export default function Home() {
       setResult(data);
       setSelectedRateId(null);
       setCalculatorQuantity("");
+      if (data.history_saved) {
+        setHistoryLoading(true);
+        void refreshHistory();
+      }
     } catch (err) {
       console.error(err);
 
@@ -1052,7 +889,7 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch("https://plantguard-ai-kcdu.onrender.com/api/chat", {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1138,6 +975,13 @@ export default function Home() {
       }
     : null;
 
+  const noVerifiedGuidance = language === "ta"
+    ? "இந்த மாதிரி வகைக்கு சரிபார்க்கப்பட்ட தகவல் அறிவுத் தரவுத்தளத்தில் இல்லை."
+    : "No verified guidance for this model class is available in the knowledge base.";
+  const diagnosisDisclaimer = language === "ta"
+    ? "இது ஒரு AI மாதிரி கணிப்பு மட்டுமே; உறுதிப்படுத்தப்பட்ட நோய் கண்டறிதல் அல்ல."
+    : "This is an AI model prediction, not a confirmed diagnosis.";
+
   const confidence = result
     ? Math.max(
         0,
@@ -1198,6 +1042,13 @@ export default function Home() {
               className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
             >
               {t.navAbout}
+            </button>
+
+            <button
+              onClick={() => scrollToSection("history")}
+              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
+            >
+              {t.navHistory}
             </button>
           </div>
 
@@ -1711,18 +1562,12 @@ export default function Home() {
                       </p>
                     </div>
 
-                    <div className="text-3xl">
-                      {confidence >= 70
-                        ? "🟢"
-                        : confidence >= 40
-                        ? "🟡"
-                        : "🟠"}
-                    </div>
+                    <div className="text-3xl" aria-hidden="true">ℹ️</div>
                   </div>
 
                   <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-200">
                     <div
-                      className="h-full rounded-full bg-green-600 transition-all duration-700"
+                      className="h-full rounded-full bg-blue-600 transition-all duration-700"
                       style={{
                         width:
                           Math.min(confidence, 100) + "%",
@@ -1730,19 +1575,14 @@ export default function Home() {
                     />
                   </div>
 
-                  <p className="mt-3 text-sm text-slate-500">
-                    {confidence >= 70
-                      ? language === "ta"
-                        ? "அதிக நம்பகத்தன்மை கொண்ட முடிவு."
-                        : "High confidence result."
-                      : confidence >= 40
-                      ? language === "ta"
-                        ? "மிதமான நம்பகத்தன்மை கொண்ட முடிவு. அறிகுறிகளைச் சரிபார்க்க பரிந்துரைக்கப்படுகிறது."
-                        : "Moderate confidence result. Consider verifying the symptoms."
-                      : language === "ta"
-                        ? "குறைந்த நம்பகத்தன்மை கொண்ட முடிவு. கைமுறையாக சரிபார்ப்பது மிகவும் பரிந்துரைக்கப்படுகிறது."
-                        : "Low confidence result. Manual verification is strongly recommended."}
+                  <p className="mt-3 text-sm text-slate-600">
+                    {result.uncertainty_warning || (language === "ta"
+                      ? "இந்த மதிப்பெண் அளவுத்திருத்தம் செய்யப்பட்ட நிகழ்தகவு அல்ல. முடிவை அறிகுறிகளுடன் ஒப்பிட்டு சரிபார்க்கவும்."
+                      : "This score is not a calibrated probability. Check the result against visible symptoms.")}
                   </p>
+                  {result.history_warning && (
+                    <p className="mt-2 text-sm text-amber-700">{result.history_warning}</p>
+                  )}
 
                 </div>
 
@@ -1760,10 +1600,7 @@ export default function Home() {
                       </h3>
 
                       <p className="mt-2 leading-7 text-green-900/70">
-                        {getExplanation(
-                          diseaseData.disease,
-                          language
-                        )}
+                        {diagnosisDisclaimer}
                       </p>
                     </div>
                   </div>
@@ -1789,7 +1626,7 @@ export default function Home() {
                 </div>
 
                 <p className="mt-5 leading-7 text-slate-600">
-                  {diseaseInfo.about}
+                  {diseaseInfo.about || noVerifiedGuidance}
                 </p>
               </div>
 
@@ -1805,7 +1642,7 @@ export default function Home() {
                 </div>
 
                 <ul className="mt-5 space-y-3">
-                  {diseaseInfo.symptoms.map(
+                  {diseaseInfo.symptoms.length > 0 ? diseaseInfo.symptoms.map(
                     (symptom, index) => (
                       <li
                         key={index}
@@ -1823,7 +1660,7 @@ export default function Home() {
                         </span>
                       </li>
                     )
-                  )}
+                  ) : <li className="text-slate-500">{noVerifiedGuidance}</li>}
                 </ul>
               </div>
 
@@ -1839,7 +1676,7 @@ export default function Home() {
                 </div>
 
                 <ul className="mt-5 space-y-3">
-                  {diseaseInfo.causes.map((cause) => (
+                  {diseaseInfo.causes.length > 0 ? diseaseInfo.causes.map((cause) => (
                     <li key={cause.id} className="flex gap-3 text-slate-600">
                       <span className="mt-1 text-purple-600">•</span>
                       <span>
@@ -1849,7 +1686,7 @@ export default function Home() {
                           : ""}
                       </span>
                     </li>
-                  ))}
+                  )) : <li className="text-slate-500">{noVerifiedGuidance}</li>}
                 </ul>
               </div>
 
@@ -1914,8 +1751,8 @@ export default function Home() {
                   {diseaseInfo.treatment.length === 0 && (
                     <p className="text-slate-500">
                       {language === "ta"
-                        ? "சிகிச்சை தகவல் தற்போது கிடைக்கவில்லை."
-                        : "No treatment information is available."}
+                        ? "சரிபார்க்கப்பட்ட சிகிச்சை தகவல் கிடைக்கவில்லை."
+                        : "No verified treatment information is available."}
                     </p>
                   )}
                 </div>
@@ -1933,7 +1770,7 @@ export default function Home() {
                 </div>
 
                 <ul className="mt-5 space-y-3">
-                  {diseaseInfo.prevention.map(
+                  {diseaseInfo.prevention.length > 0 ? diseaseInfo.prevention.map(
                     (item, index) => (
                       <li
                         key={index}
@@ -1951,7 +1788,7 @@ export default function Home() {
                         </span>
                       </li>
                     )
-                  )}
+                  ) : <li className="text-slate-500">{noVerifiedGuidance}</li>}
                 </ul>
               </div>
 
@@ -2186,6 +2023,65 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {/* SAVED PREDICTIONS */}
+      <section id="history" className="bg-slate-50 px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-widest text-green-700">
+                {t.navHistory}
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-slate-900">
+                {t.historyTitle}
+              </h2>
+              <p className="mt-2 text-slate-600">{t.historySubtitle}</p>
+            </div>
+            <button
+              onClick={() => {
+                setHistoryLoading(true);
+                void refreshHistory();
+              }}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+            >
+              {t.retry}
+            </button>
+          </div>
+
+          {historyLoading ? (
+            <p className="mt-6 rounded-2xl bg-white p-6 text-slate-500">{t.historyLoading}</p>
+          ) : historyError ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+              {t.historyError}
+            </div>
+          ) : history.length === 0 ? (
+            <p className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+              {t.historyEmpty}
+            </p>
+          ) : (
+            <ul className="mt-6 grid gap-4 md:grid-cols-2">
+              {history.map((item) => (
+                <li key={item.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">{item.disease_name}</h3>
+                      <p className="mt-1 text-sm text-slate-600">{item.crop_name}</p>
+                    </div>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">
+                      {t.modelConfidence}: {item.confidence === null ? "—" : `${item.confidence.toFixed(2)}%`}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-xs text-slate-500">
+                    {item.created_at
+                      ? new Date(item.created_at).toLocaleString(language === "ta" ? "ta-IN" : "en-US")
+                      : "—"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
 
       {/* HOW IT WORKS */}
       <section
@@ -2507,6 +2403,13 @@ export default function Home() {
                 className="block transition hover:text-white"
               >
                 {t.diseaseDetectionLink}
+              </button>
+
+              <button
+                onClick={() => scrollToSection("history")}
+                className="block transition hover:text-white"
+              >
+                {t.navHistory}
               </button>
 
               <button

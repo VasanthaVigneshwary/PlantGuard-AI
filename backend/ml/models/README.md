@@ -1,55 +1,34 @@
----
-language: en
-license: apache-2.0
-tags:
-- image-classification
-- keras
-- tensorflow
-- plant-disease
-- efficientnet
-datasets:
-- PlantVillage
-metrics:
-- accuracy
-library_name: keras
----
+# Plant disease model artifacts
 
-# PlantVillage Plant Disease Detection (EfficientNet)
+## Active ONNX model
 
-This model is a Keras implementation of EfficientNet trained to classify 38 types of plant diseases from the PlantVillage dataset.
+`predict.py` loads `efficientnet_v2_s_best.onnx` with ONNX Runtime and requires
+the adjacent `efficientnet_v2_s_best.onnx.data` external tensor file. Keep the
+two files together. The ONNX graph declares a float input shaped
+`[batch, 3, 224, 224]` and a 38-value output named `logits`. It has no embedded
+preprocessing nodes; inference converts the image to RGB, resizes it to 224 by
+224, scales pixels to `[0, 1]`, then applies ImageNet channel mean and standard
+deviation normalization.
 
-## Model Description
-- **Architecture:** EfficientNet (Keras .keras format)
-- **Task:** Image Classification (38 classes)
-- **Dataset:** PlantVillage (color images)
+`classes.json` lists the 38 output labels in model-index order. The order agrees
+with `class_names.txt`. The filenames and class mapping match the model card at
+[`BiernyVR/crop-disease-classifier`](https://huggingface.co/BiernyVR/crop-disease-classifier),
+which identifies the model as an EfficientNetV2-S trained on PlantVillage and
+the repository license as MIT. The model card reports 99.89% validation
+accuracy, but that result has not been independently reproduced here and does
+not establish performance on field photographs. Do not present the ONNX model's
+softmax score as calibrated confidence or report the card's accuracy as a local
+evaluation result.
 
-## Evaluation Results
-The model achieves an overall accuracy of **41.68%** on the provided test set.
+The included `test_images/sample_leaf.jpg` is also listed by that model card as
+an Apple scab sample. It is useful for a loading/inference smoke check only; it
+is not an independent validation image. The other checked-in webp fixture has
+no known ground-truth label, so neither fixture is used to calculate accuracy.
 
-### Metrics
-- **Accuracy:** 41.68%
-- **Total Test Images:** 511
+## Legacy Keras artifact
 
-## Intended Use
-This model is intended for educational and research purposes in the field of agricultural plant pathology. It can be used to identify potential diseases from leaf images.
-
-## Limitations
-- Performance may vary significantly across different plant species and disease types.
-- The model was trained on the PlantVillage dataset and may not generalize well to images taken in different environmental conditions or on different leaf backgrounds.
-
-## How to Use
-
-```python
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-import numpy as np
-
-# Load model
-model = load_model("plant_disease_efficientnet.keras")
-
-# Preprocess image (EfficientNet expectation)
-# ... see inference.py for details
-```
-
-## Repository
-GitHub: [JinWei225/Plant-disease-detection](https://github.com/JinWei225/Plant-disease-detection)
+`plant_disease_efficientnet.keras` and the accompanying model description are
+retained from an earlier project version. The description attributes that
+artifact to PlantVillage and reports 41.68% on 511 images. Those figures apply
+only to that stated Keras evaluation; they have not been verified for the active
+ONNX model.
