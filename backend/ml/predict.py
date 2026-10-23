@@ -31,12 +31,30 @@ def get_inference_session() -> ort.InferenceSession:
         opts = ort.SessionOptions()
         opts.inter_op_num_threads = 2
         opts.intra_op_num_threads = 2
-        _session = ort.InferenceSession(
+        session = ort.InferenceSession(
             str(ONNX_MODEL_PATH),
             sess_options=opts,
             providers=["CPUExecutionProvider"]
         )
+        validate_inference_signature(session)
+        _session = session
     return _session
+
+
+def validate_inference_signature(session: ort.InferenceSession) -> None:
+    """Fail early when a deployed ONNX artifact is incompatible with this pipeline."""
+    inputs = session.get_inputs()
+    outputs = session.get_outputs()
+    if len(inputs) != 1 or inputs[0].type != "tensor(float)":
+        raise RuntimeError("Model must expose one float32 image input")
+    input_shape = inputs[0].shape
+    if len(input_shape) != 4 or input_shape[1:] != [3, 224, 224]:
+        raise RuntimeError(f"Model input must have shape [batch, 3, 224, 224]; found {input_shape}")
+    if len(outputs) != 1 or outputs[0].type != "tensor(float)":
+        raise RuntimeError("Model must expose one float32 logits output")
+    output_shape = outputs[0].shape
+    if len(output_shape) != 2 or output_shape[-1] != 38:
+        raise RuntimeError(f"Model output must have shape [batch, 38]; found {output_shape}")
 
 
 def get_class_names() -> List[str]:

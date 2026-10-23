@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +18,28 @@ import evaluate_model  # noqa: E402
 
 
 class ModelReliabilityTests(unittest.TestCase):
+    def test_runtime_signature_accepts_expected_dynamic_batch_shapes(self):
+        session = SimpleNamespace(
+            get_inputs=lambda: [SimpleNamespace(type="tensor(float)", shape=["batch_size", 3, 224, 224])],
+            get_outputs=lambda: [SimpleNamespace(type="tensor(float)", shape=["batch_size", 38])],
+        )
+        prediction.validate_inference_signature(session)
+
+    def test_runtime_signature_rejects_incompatible_input_output_and_dtype(self):
+        bad_sessions = [
+            ("Model input must", [SimpleNamespace(type="tensor(float)", shape=["batch", 3, 256, 256])],
+             [SimpleNamespace(type="tensor(float)", shape=["batch", 38])]),
+            ("Model output must", [SimpleNamespace(type="tensor(float)", shape=["batch", 3, 224, 224])],
+             [SimpleNamespace(type="tensor(float)", shape=["batch", 37])]),
+            ("one float32 image input", [SimpleNamespace(type="tensor(uint8)", shape=["batch", 3, 224, 224])],
+             [SimpleNamespace(type="tensor(float)", shape=["batch", 38])]),
+        ]
+        for message, inputs, outputs in bad_sessions:
+            with self.subTest(message=message):
+                session = SimpleNamespace(get_inputs=lambda: inputs, get_outputs=lambda: outputs)
+                with self.assertRaisesRegex(RuntimeError, message):
+                    prediction.validate_inference_signature(session)
+
     def test_preprocessing_matches_upstream_shape_dtype_and_rgb_normalization(self):
         image = Image.new("RGB", (13, 29), (255, 0, 0))
         tensor = prediction.preprocess_image(image)
