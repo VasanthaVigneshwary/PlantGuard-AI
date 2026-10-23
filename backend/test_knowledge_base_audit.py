@@ -27,7 +27,11 @@ class KnowledgeBaseAuditTests(unittest.TestCase):
                 ("Apple___healthy", 1, 1, 2, 1, 1, 2),
                 ("Tomato___Early_blight", 1, 1, 3, 2, 1, 1),
             ],
-            ["[verified] https://example.org/label", "Source: extension guide"],
+            [
+                "Product/formulation: Example 50% WP; [verified]; "
+                "Source: https://agritech.tnau.ac.in/label",
+                "Source: extension guide",
+            ],
         )
         with (
             patch.object(audit_knowledge_base, "load_model_classes", return_value=[

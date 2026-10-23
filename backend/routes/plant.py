@@ -14,6 +14,7 @@ from services.database_service import (
     get_notifications as get_notification_records,
     save_prediction,
     get_prediction_history,
+    get_verified_application_rate_metadata,
 )
 
 
@@ -420,13 +421,22 @@ async def upload_plant_image(
                 }
 
             if len(row) > 6 and row[6] is not None:
+                verified_metadata = get_verified_application_rate_metadata(
+                    row[11] if len(row) > 11 else None
+                )
+                if verified_metadata is None:
+                    continue
                 treatments[treatment_id]["application_rates"].append({
                     "id": row[6],
                     "application_method": row[7] if len(row) > 7 else None,
                     "measurement_unit": row[8] if len(row) > 8 else None,
                     "rate": float(row[9]) if len(row) > 9 and row[9] is not None else None,
                     "basis": row[10] if len(row) > 10 else None,
-                    "notes": row[11] if len(row) > 11 else None
+                    "notes": row[11] if len(row) > 11 else None,
+                    "verified": True,
+                    "product_formulation": verified_metadata["product_formulation"],
+                    "source_url": verified_metadata["source_url"],
+                    "disease_id": disease_id,
                 })
 
         symptoms_list = [

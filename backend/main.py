@@ -7,7 +7,8 @@ from database import get_connection
 from services.database_service import (
     get_all_crops,
     get_all_diseases,
-    get_disease_details
+    get_disease_details,
+    get_verified_application_rate_metadata,
 )
 
 app = FastAPI(title="Plant Guard AI API", version="2.0.0")
@@ -154,13 +155,20 @@ def get_disease(disease_id: int):
 
         # Add application rate if one exists
         if row[6] is not None:
+            verified_metadata = get_verified_application_rate_metadata(row[11])
+            if verified_metadata is None:
+                continue
             treatments[treatment_id]["application_rates"].append({
                 "id": row[6],
                 "application_method": row[7],
                 "measurement_unit": row[8],
                 "rate": float(row[9]) if row[9] is not None else None,
                 "basis": row[10],
-                "notes": row[11]
+                "notes": row[11],
+                "verified": True,
+                "product_formulation": verified_metadata["product_formulation"],
+                "source_url": verified_metadata["source_url"],
+                "disease_id": disease[0],
             })
 
     return {

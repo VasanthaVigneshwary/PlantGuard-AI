@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  calculateTreatmentQuantity,
+  getCalculableAreaRates,
+  validateAreaInput,
+} from "../lib/treatment-calculator.mjs";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -39,11 +44,15 @@ interface PredictionResult {
     precautions: string;
     application_rates: {
       id: number;
-      application_method: string;
+      application_method: string | null;
       measurement_unit: string;
       rate: number | null;
       basis: string;
       notes: string;
+      verified: boolean;
+      product_formulation: string;
+      source_url: string;
+      disease_id: number;
     }[];
   }[];
   prevention: {
@@ -84,26 +93,6 @@ interface NotificationItem {
 }
 
 type Language = "en" | "ta";
-
-type TreatmentCalculationResult =
-  | {
-      error: string;
-      quantity: null;
-      totalRequired: null;
-      basisLabel: string;
-      unitLabel: string;
-      rateDisplay: string;
-      calculationText: string;
-    }
-  | {
-      error: null;
-      quantity: number;
-      totalRequired: number;
-      basisLabel: string;
-      unitLabel: string;
-      rateDisplay: string;
-      calculationText: string;
-    };
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
@@ -154,6 +143,12 @@ const translations: Record<Language, Record<string, string>> = {
     treatmentCalculator: "Treatment Calculator",
     affectedArea: "Affected area",
     acres: "Acres",
+    areaHelp: "Enter the affected area in acres. Calculation uses exact per-acre units only.",
+    areaEmpty: "Enter the affected area.",
+    areaInvalid: "Enter a valid number using digits and a decimal point only.",
+    areaPositive: "Affected area must be greater than zero.",
+    rateUnavailable: "Calculation is unavailable because no verified rate matches this disease, product/formulation, and supported area unit. Your area is not used to estimate a dose.",
+    sourceReference: "Verified source",
     selectedProduct: "Selected Product",
     applicationMethod: "Application Method",
     rate: "Rate",
@@ -288,6 +283,12 @@ const translations: Record<Language, Record<string, string>> = {
     treatmentCalculator: "சிகிச்சை கால்குலேட்டர்",
     affectedArea: "பாதிக்கப்பட்ட பகுதி",
     acres: "ஏக்கர்",
+    areaHelp: "பாதிக்கப்பட்ட பரப்பை ஏக்கரில் உள்ளிடவும். கணக்கீடு ஏக்கருக்கான பொருந்தும் அலகுகளை மட்டுமே பயன்படுத்தும்.",
+    areaEmpty: "பாதிக்கப்பட்ட பரப்பை உள்ளிடவும்.",
+    areaInvalid: "எண்கள் மற்றும் தசமப் புள்ளியை மட்டும் பயன்படுத்தி சரியான எண்ணை உள்ளிடவும்.",
+    areaPositive: "பாதிக்கப்பட்ட பரப்பு பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்.",
+    rateUnavailable: "இந்த நோய், தயாரிப்பு/கலவை மற்றும் ஆதரிக்கப்படும் பரப்பளவு அலகுக்கு சரிபார்க்கப்பட்ட வீதம் இல்லை; கணக்கீடு கிடைக்காது. உங்கள் பரப்பளவை மருந்தளவை ஊகிக்கப் பயன்படுத்தமாட்டோம்.",
+    sourceReference: "சரிபார்க்கப்பட்ட ஆதாரம்",
     selectedProduct: "தேர்ந்தெடுக்கப்பட்ட தயாரிப்பு",
     applicationMethod: "பயன்பாட்டு முறை",
     rate: "வீதம்",
@@ -375,62 +376,6 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
-function getDisplayUnit(measurementUnit: string) {
-  if (!measurementUnit) {
-    return "unit";
-  }
-
-  const cleanUnit = measurementUnit.trim();
-
-  if (cleanUnit.includes("/")) {
-    return cleanUnit.split("/")[0].trim() || "unit";
-  }
-
-  return cleanUnit || "unit";
-}
-
-function getProductDisplayName(
-  treatmentName: string,
-  notes: string
-) {
-  const cleanNotes = (notes || "").trim();
-
-  if (!cleanNotes) {
-    return treatmentName || "Unknown product";
-  }
-
-  const beforeSource = cleanNotes.split(/\s*Source:/i)[0].trim();
-
-  if (beforeSource && beforeSource.length > 0) {
-    return beforeSource.replace(/\.$/, "");
-  }
-
-  return treatmentName || "Unknown product";
-}
-
-function getRateBasisType(measurementUnit: string, basis: string) {
-  const normalizedUnit = (measurementUnit || "").toLowerCase();
-  const normalizedBasis = (basis || "").toLowerCase();
-
-  if (
-    normalizedBasis.includes("plant") ||
-    normalizedUnit.includes("/plant") ||
-    normalizedUnit.includes("plant")
-  ) {
-    return "plant";
-  }
-
-  if (
-    normalizedBasis.includes("acre") ||
-    normalizedUnit.includes("/acre") ||
-    normalizedUnit.includes("acre")
-  ) {
-    return "area";
-  }
-
-  return "unknown";
-}
-
 function getLocalizedDisplayName(value: string | undefined, language: Language) {
   if (!value) {
     return value ?? "";
@@ -478,6 +423,7 @@ export default function Home() {
   const [error, setError] = useState("");
 
   const [calculatorQuantity, setCalculatorQuantity] = useState("");
+  const [calculatorTouched, setCalculatorTouched] = useState(false);
   const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -742,45 +688,13 @@ export default function Home() {
     setResult(null);
     setError("");
     setCalculatorQuantity("");
+    setCalculatorTouched(false);
     setSelectedRateId(null);
   };
 
-  const calculatorOptions = useMemo(
-    () =>
-      result?.treatments.flatMap((treatment) =>
-        treatment.application_rates
-          .filter(
-            (rate) =>
-              rate.rate !== null &&
-              Number.isFinite(Number(rate.rate)) &&
-              Number(rate.rate) >= 0
-          )
-          .map((rate) => ({
-            rateId: rate.id,
-            treatmentId: treatment.id,
-            treatmentName: treatment.name,
-            treatmentType: treatment.type,
-            productName: getProductDisplayName(
-              treatment.name,
-              rate.notes
-            ),
-            applicationMethod: rate.application_method,
-            measurementUnit: rate.measurement_unit,
-            rate: Number(rate.rate),
-            basis: rate.basis,
-            notes: rate.notes,
-            basisType: getRateBasisType(
-              rate.measurement_unit,
-              rate.basis
-            ),
-          }))
-      ) ?? [],
-    [result]
-  );
-
   const displayedOptions = useMemo(
-    () => calculatorOptions.filter((option) => option.basisType === "area"),
-    [calculatorOptions]
+    () => getCalculableAreaRates(result?.treatments, result?.disease.id ?? null),
+    [result]
   );
 
   const selectedRate = useMemo(
@@ -791,56 +705,12 @@ export default function Home() {
     [displayedOptions, selectedRateId]
   );
 
-  const treatmentCalculation: TreatmentCalculationResult = useMemo(() => {
-    if (!selectedRate) {
-      return {
-        error: "No area-based application-rate data is available for the selected product.",
-        quantity: null,
-        totalRequired: null,
-        basisLabel: "",
-        unitLabel: "",
-        rateDisplay: "",
-        calculationText: "",
-      };
-    }
-
-    const quantity = Number(calculatorQuantity);
-
-    if (
-      calculatorQuantity.trim() === "" ||
-      !Number.isFinite(quantity) ||
-      quantity <= 0
-    ) {
-      return {
-        error: "Enter a valid affected area greater than zero.",
-        quantity: null,
-        totalRequired: null,
-        basisLabel: "",
-        unitLabel: "",
-        rateDisplay: "",
-        calculationText: "",
-      };
-    }
-
-    const totalRequired = quantity * selectedRate.rate;
-
-    return {
-      error: null,
-      quantity,
-      totalRequired,
-      basisLabel:
-        selectedRate.basis && selectedRate.basis.trim()
-          ? selectedRate.basis
-          : "per unit",
-      unitLabel: getDisplayUnit(selectedRate.measurementUnit),
-      rateDisplay: `${selectedRate.rate} ${selectedRate.measurementUnit}`,
-      calculationText: `${quantity} acres × ${selectedRate.rate} ${selectedRate.measurementUnit} = ${totalRequired.toFixed(2)} ${getDisplayUnit(selectedRate.measurementUnit)}`,
-    };
-  }, [calculatorQuantity, selectedRate]);
+  const areaValidation = validateAreaInput(calculatorQuantity);
+  const treatmentCalculation = calculateTreatmentQuantity(calculatorQuantity, selectedRate);
 
   const hasValidCalculation =
     treatmentCalculation.error === null &&
-    treatmentCalculation.totalRequired !== null;
+    treatmentCalculation.total !== null;
 
   const findPendingBotMessageIndex = (
     currentMessages: { sender: "bot" | "user"; text: string }[],
@@ -1813,43 +1683,55 @@ export default function Home() {
                 </p>
               </div>
 
+              <div className="mx-auto mt-8 max-w-4xl">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <label htmlFor="affected-area" className="mb-3 block text-sm font-bold text-slate-700">
+                    {t.affectedArea}
+                  </label>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      id="affected-area"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      value={calculatorQuantity}
+                      onChange={(event) => {
+                        setCalculatorQuantity(event.target.value);
+                        setCalculatorTouched(true);
+                      }}
+                      onBlur={() => setCalculatorTouched(true)}
+                      placeholder="Example: 0.16"
+                      aria-invalid={calculatorTouched && !areaValidation.valid}
+                      aria-describedby="affected-area-help affected-area-error"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    />
+
+                    <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-700">
+                      {t.acres}
+                    </div>
+                  </div>
+
+                  <p id="affected-area-help" className="mt-2 text-xs text-slate-500">{t.areaHelp}</p>
+                  {calculatorTouched && !areaValidation.valid && (
+                    <p id="affected-area-error" role="alert" className="mt-2 text-sm font-semibold text-red-700">
+                      {areaValidation.error === "empty"
+                        ? t.areaEmpty
+                        : areaValidation.error === "non_positive"
+                          ? t.areaPositive
+                          : t.areaInvalid}
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {displayedOptions.length === 0 ? (
-                <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-center text-sm text-slate-600">
-                  {language === "ta"
-                    ? "தற்போதைய அறிவுத் தரவுத்தளத்தில் இந்த நோய்க்கு பரப்பளவின்படி பயன்பாட்டு வீதத் தகவல் இல்லை."
-                    : "No area-based application-rate data is available for this disease in the current knowledge base."}
+                <div className="mx-auto mt-6 max-w-4xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-sm text-amber-950">
+                  <p className="font-bold">{language === "ta" ? "கணக்கீடு கிடைக்கவில்லை" : "Calculation unavailable"}</p>
+                  <p className="mt-1">{t.rateUnavailable}</p>
                 </div>
               ) : (
                 <>
-                  <div className="mx-auto mt-8 max-w-4xl">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <label className="mb-3 block text-sm font-bold text-slate-700">
-                        {t.affectedArea}
-                      </label>
-
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={calculatorQuantity}
-                          onChange={(event) => setCalculatorQuantity(event.target.value)}
-                          placeholder="Example: 0.16"
-                          className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-                        />
-
-                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-700">
-                          {t.acres}
-                        </div>
-                      </div>
-
-                      <p className="mt-2 text-xs text-slate-500">
-                        {language === "ta"
-                          ? "சிகிச்சை தேவைப்படும் பயிரின் பரப்பளவைக் குறிப்பிடவும்."
-                          : "Enter the area of the crop that needs treatment."}
-                      </p>
-                    </div>
-                  </div>
 
                   <div className="mx-auto mt-8 max-w-4xl">
                     <p className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">
@@ -1944,17 +1826,19 @@ export default function Home() {
                         )}
                       </div>
 
-                      {selectedRate.notes && (
-                        <p className="mt-4 text-sm text-slate-500">
-                          <strong>{language === "ta" ? "குறிப்புகள்:" : "Notes:"}</strong> {selectedRate.notes}
-                        </p>
-                      )}
+                      <p className="mt-4 text-sm text-slate-600">
+                        <strong>{t.sourceReference}:</strong>{" "}
+                        <a
+                          href={selectedRate.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="break-all font-semibold text-blue-700 underline"
+                        >
+                          {selectedRate.sourceUrl}
+                        </a>
+                      </p>
 
-                      {treatmentCalculation.error ? (
-                        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                          {treatmentCalculation.error}
-                        </div>
-                      ) : hasValidCalculation ? (
+                      {hasValidCalculation ? (
                         <>
                           <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
                             <p className="text-sm font-semibold text-slate-500">
@@ -1962,16 +1846,17 @@ export default function Home() {
                             </p>
 
                             <p className="mt-2 text-4xl font-black text-green-700">
-                              {treatmentCalculation.totalRequired.toFixed(2)}
+                              {treatmentCalculation.total.toFixed(2)}
                             </p>
 
                             <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                              {treatmentCalculation.unitLabel}
+                              {treatmentCalculation.unit}
                             </p>
                           </div>
 
                           <div className="mt-4 text-sm leading-6 text-slate-600">
-                            <strong>{language === "ta" ? "கணக்கீடு:" : "Calculation:"}</strong> {treatmentCalculation.calculationText}
+                            <strong>{language === "ta" ? "கணக்கீடு:" : "Calculation:"}</strong>{" "}
+                            {treatmentCalculation.area} acres × {selectedRate.rate} {selectedRate.measurementUnit} = {treatmentCalculation.total.toFixed(2)} {treatmentCalculation.unit}
                           </div>
                         </>
                       ) : null}

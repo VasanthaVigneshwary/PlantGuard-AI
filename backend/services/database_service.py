@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import re
+from urllib.parse import urlsplit
 
 from database import get_connection
 
@@ -9,11 +10,58 @@ def _normalize_prediction_part(value):
     return " ".join(normalized.lower().split())
 
 
-def _has_verified_rate_source(notes):
-    """Only expose a rate after a person marks it verified and adds a source URL."""
+def get_verified_application_rate_metadata(notes):
+    """Return rate identity and source only for explicitly reviewed records."""
     if not isinstance(notes, str):
-        return False
-    return "[verified]" in notes.lower() and re.search(r"https://\S+", notes) is not None
+        return None
+    if "[verified]" not in notes.lower():
+        return None
+
+    product_match = re.search(
+        r"(?:^|[;\n])\s*Product/formulation\s*:\s*([^;\n]+)",
+        notes,
+        flags=re.IGNORECASE,
+    )
+    source_match = re.search(
+        r"(?:^|[;\n])\s*Source(?: reference)?\s*:\s*(https://[^\s;]+)",
+        notes,
+        flags=re.IGNORECASE,
+    )
+    if not product_match or not source_match:
+        return None
+
+    product_formulation = product_match.group(1).strip()
+    source_url = source_match.group(1).rstrip(".,)")
+    if not product_formulation:
+        return None
+    try:
+        parsed_source = urlsplit(source_url)
+        source_host = (parsed_source.hostname or "").lower().rstrip(".")
+        source_port = parsed_source.port
+    except ValueError:
+        return None
+    if (
+        parsed_source.scheme != "https"
+        or not parsed_source.netloc
+        or parsed_source.username is not None
+        or parsed_source.password is not None
+        or source_port not in (None, 443)
+    ):
+        return None
+    allowed_suffixes = (".gov", ".gov.in", ".edu", ".ac.in")
+    allowed_hosts = {"fao.org", "www.fao.org"}
+    if source_host not in allowed_hosts and not source_host.endswith(allowed_suffixes):
+        return None
+
+    return {
+        "product_formulation": product_formulation,
+        "source_url": source_url,
+    }
+
+
+def _has_verified_rate_source(notes):
+    """Require a manual verification marker, exact product, and HTTPS source."""
+    return get_verified_application_rate_metadata(notes) is not None
 
 
 _GENERATED_REMINDER_TEMPLATES = {

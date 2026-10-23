@@ -69,6 +69,7 @@ From `frontend/`:
 ```powershell
 npm run build
 npm run lint
+npm run test:calculator
 ```
 
 The model smoke checks use two available images to verify loading, input/output shape, finite scores, class mapping, and invalid-image rejection. One image is the model-card Apple scab sample; neither image is an independent field-validation sample. The checks report no accuracy metric. Database-isolated API tests mock database writes; the local end-to-end verification separately exercised an actual upload, inference, PostgreSQL guidance lookup, prediction save, and history retrieval, then removed its test history row.
@@ -81,11 +82,11 @@ The model smoke checks use two available images to verify loading, input/output 
 - The API retrieves disease details from PostgreSQL. When a class has no matching record, the response contains no invented disease guidance.
 - Prediction history stores the raw score as a fraction in PostgreSQL and exposes the existing API field as a percentage. Uploaded image bytes are not retained.
 - The local database has complete class-key coverage. That does not verify the scientific quality of every description or treatment entry.
-- The current database contains 27 application-rate rows, but they lack both an explicit verification marker and a source URL. The application withholds those rates from the API and calculator until each rate has been reviewed and its record marked with `[verified]` plus an HTTPS source URL in its notes. No pesticide dosage should be inferred from the existing unverified rows.
+- The current database contains 27 application-rate rows, and the read-only audit finds none verified. Rates stay out of the API and calculator until a reviewer confirms an authoritative source and records `Product/formulation: <exact label>; [verified]; Source: <HTTPS URL>` in the rate notes. Accepted source hosts are government (`.gov`, `.gov.in`), educational (`.edu`), Tamil Nadu Agricultural University (`.ac.in`), and FAO domains. The area calculator currently supports only exact `g/acre`, `kg/acre`, or `ml/acre` rates with a `per acre` basis; it performs no unit conversions. The UI keeps the affected-area field available when a rate is unavailable and calculates only a rate tied to the selected disease with complete verification metadata.
 - English and Tamil interface strings are available. Agricultural database entries are shown in Tamil only where a translation exists; untranslated technical material remains in its source language.
 - The chatbot uses keyword matching and database content. It is not a general-purpose LLM, and microphone input or scheduled notifications are not implemented.
 - Notifications show database records only. Empty notification history remains empty; no scheduler or delivery service is claimed.
-- The area calculator only works when a verified application-rate record is available. It currently reports unavailable guidance for the unverified rates above.
+- The area calculator accepts and validates affected acres even when a verified rate is unavailable. It only calculates from an exact-disease rate with an explicit product/formulation, verified authoritative source, and supported unit.
 
 ## API routes
 

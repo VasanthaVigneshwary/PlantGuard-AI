@@ -222,15 +222,103 @@ class ApplicationRateVerificationTests(unittest.TestCase):
     def test_rate_requires_explicit_verification_marker_and_https_source(self):
         self.assertTrue(
             database_service._has_verified_rate_source(
-                "[verified] https://agriculture.example/guidance"
+                "Product/formulation: Mancozeb 75% WP; [verified]; Source: https://agritech.tnau.ac.in/guidance"
             )
         )
         self.assertFalse(database_service._has_verified_rate_source("Source: TNAU Agritech Portal"))
         self.assertFalse(
             database_service._has_verified_rate_source(
-                "[verified] http://agriculture.example/guidance"
+                "Product/formulation: Mancozeb 75% WP; [verified]; Source: http://agritech.tnau.ac.in/guidance"
             )
         )
+        self.assertFalse(
+            database_service._has_verified_rate_source(
+                "[verified]; Source: https://agritech.tnau.ac.in/guidance"
+            )
+        )
+        self.assertFalse(
+            database_service._has_verified_rate_source(
+                "Product/formulation: Mancozeb 75% WP; [verified]; "
+                "Source: https://unverified.example/guidance"
+            )
+        )
+        for unsafe_source in (
+            "https://user:secret@agritech.tnau.ac.in/label",
+            "https://agritech.tnau.ac.in:8443/label",
+            "https://[malformed",
+        ):
+            self.assertFalse(
+                database_service._has_verified_rate_source(
+                    f"Product/formulation: Mancozeb 75% WP; [verified]; Source: {unsafe_source}"
+                )
+            )
+
+    def test_verified_rate_metadata_requires_exact_product_and_source_reference(self):
+        metadata = database_service.get_verified_application_rate_metadata(
+            "Product/formulation: Copper hydroxide 53.8% DF; [verified]; "
+            "Source: https://agritech.tnau.ac.in/approved-label."
+        )
+        self.assertEqual(metadata["product_formulation"], "Copper hydroxide 53.8% DF")
+        self.assertEqual(metadata["source_url"], "https://agritech.tnau.ac.in/approved-label")
+
+    def test_unverified_rate_is_removed_from_disease_details(self):
+        connection = Mock()
+        cursor = Mock()
+        connection.cursor.return_value = cursor
+        cursor.fetchone.return_value = (42, "Apple Scab", "Apple", "Description")
+        cursor.fetchall.side_effect = [
+            [],
+            [],
+            [],
+            [
+                (1, "Scab treatment", "chemical", "description", "instructions", "precautions",
+                 10, "spray", "g/acre", 200, "per acre", "Source: https://example.org/label"),
+                (2, "Verified treatment", "chemical", "description", "instructions", "precautions",
+                 11, "spray", "g/acre", 150, "per acre",
+                 "Product/formulation: Product 50% WP; [verified]; Source: https://agritech.tnau.ac.in/label"),
+            ],
+        ]
+
+        with patch.object(database_service, "get_connection", return_value=connection):
+            details = database_service.get_disease_details(42)
+
+        rate_rows = details["treatments"]
+        self.assertIsNone(rate_rows[0][6])
+        self.assertEqual(rate_rows[1][6], 11)
+        self.assertFalse(connection.commit.called)
+
+    def test_disease_details_expose_product_formulation_and_source_for_verified_rate(self):
+        with patch(
+            "main.get_disease_details",
+            return_value={
+                "disease": (42, "Apple Scab", "Apple", "Description"),
+                "symptoms": [],
+                "causes": [],
+                "prevention": [],
+                "treatments": [
+                    (1, "Scab treatment", "chemical", "desc", "instructions", "precautions",
+                     11, "spray", "g/acre", 150, "per acre",
+                     "Product/formulation: Product 50% WP; [verified]; "
+                     "Source: https://agritech.tnau.ac.in/label"),
+                    (2, "Unverified treatment", "chemical", "desc", "instructions", "precautions",
+                     12, "spray", "g/acre", 999, "per acre",
+                     "[verified]; Source: https://agritech.tnau.ac.in/label"),
+                ],
+            },
+        ):
+            response = TestClient(app).get("/api/diseases/42")
+
+        self.assertEqual(response.status_code, 200)
+        rates = [
+            rate
+            for treatment in response.json()["treatments"]
+            for rate in treatment["application_rates"]
+        ]
+        self.assertEqual(len(rates), 1)
+        self.assertTrue(rates[0]["verified"])
+        self.assertEqual(rates[0]["disease_id"], 42)
+        self.assertEqual(rates[0]["product_formulation"], "Product 50% WP")
+        self.assertEqual(rates[0]["source_url"], "https://agritech.tnau.ac.in/label")
 
     def test_generated_notification_templates_are_not_returned_as_records(self):
         connection = Mock()
