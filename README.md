@@ -59,6 +59,8 @@ From the repository root:
 ```powershell
 .\.venv\Scripts\python.exe backend\test_model.py
 .\.venv\Scripts\python.exe -m unittest backend.test_api_endpoints -v
+.\.venv\Scripts\python.exe backend\audit_knowledge_base.py
+.\.venv\Scripts\python.exe -m unittest backend.test_knowledge_base_audit -v
 .\.venv\Scripts\python.exe -m compileall -q backend
 ```
 
@@ -70,6 +72,8 @@ npm run lint
 ```
 
 The model smoke checks use two available images to verify loading, input/output shape, finite scores, class mapping, and invalid-image rejection. One image is the model-card Apple scab sample; neither image is an independent field-validation sample. The checks report no accuracy metric. Database-isolated API tests mock database writes; the local end-to-end verification separately exercised an actual upload, inference, PostgreSQL guidance lookup, prediction save, and history retrieval, then removed its test history row.
+
+`backend/audit_knowledge_base.py` compares all ordered model labels with exact PostgreSQL `prediction_key` mappings and reports duplicate/missing keys and application-rate verification counts. It starts a read-only transaction and does not display rate notes or modify database records. A nonzero exit status means at least one class is missing or mapped more than once; unverified rates are reported separately and remain unavailable to the calculator.
 
 ## Current behavior and limitations
 
