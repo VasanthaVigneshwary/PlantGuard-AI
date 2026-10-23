@@ -14,16 +14,19 @@ import audit_knowledge_base  # noqa: E402
 
 
 class KnowledgeBaseAuditTests(unittest.TestCase):
-    def make_connection(self, mappings, rate_notes):
+    def make_connection(self, mapping_details, rate_notes):
         connection = Mock()
         cursor = Mock()
         connection.cursor.return_value = cursor
-        cursor.fetchall.side_effect = [mappings, [(note,) for note in rate_notes]]
+        cursor.fetchall.side_effect = [mapping_details, [(note,) for note in rate_notes]]
         return connection, cursor
 
     def test_reports_complete_coverage_and_unverified_rate_count_read_only(self):
         connection, cursor = self.make_connection(
-            [("Apple___healthy", 1), ("Tomato___Early_blight", 1)],
+            [
+                ("Apple___healthy", 1, 1, 2, 1, 1, 2),
+                ("Tomato___Early_blight", 1, 1, 3, 2, 1, 1),
+            ],
             ["[verified] https://example.org/label", "Source: extension guide"],
         )
         with (
@@ -38,6 +41,8 @@ class KnowledgeBaseAuditTests(unittest.TestCase):
         self.assertEqual(report["missing_classes"], [])
         self.assertEqual(report["duplicate_mappings"], {})
         self.assertTrue(report["mapping_coverage_complete"])
+        self.assertEqual(report["detail_coverage_by_class"]["symptoms"], 2)
+        self.assertEqual(report["classes_missing_details"]["treatments"], [])
         self.assertEqual(report["application_rate_count"], 2)
         self.assertEqual(report["unverified_application_rate_count"], 1)
         self.assertEqual(cursor.execute.call_args_list[0].args[0], "SET TRANSACTION READ ONLY;")
@@ -47,7 +52,7 @@ class KnowledgeBaseAuditTests(unittest.TestCase):
 
     def test_reports_missing_and_duplicate_model_labels(self):
         connection, _ = self.make_connection(
-            [("Apple___healthy", 2)],
+            [("Apple___healthy", 2, 1, 0, 0, 0, 0)],
             [],
         )
         with (
@@ -61,6 +66,8 @@ class KnowledgeBaseAuditTests(unittest.TestCase):
         self.assertEqual(report["missing_classes"], ["Tomato___healthy"])
         self.assertEqual(report["duplicate_mappings"], {"Apple___healthy": 2})
         self.assertFalse(report["mapping_coverage_complete"])
+        self.assertEqual(report["classes_missing_details"]["symptoms"], ["Apple___healthy"])
+        self.assertEqual(report["detail_coverage_by_class"]["description"], 1)
 
 
 if __name__ == "__main__":
