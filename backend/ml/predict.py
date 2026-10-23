@@ -40,23 +40,43 @@ def get_inference_session() -> ort.InferenceSession:
 
 
 def get_class_names() -> List[str]:
-    """Load class names from classes.json or fallback class_names.txt."""
+    """Load labels and reject disagreement between the indexed and text lists."""
     global _class_names
     if not _class_names:
+        json_classes = None
         if CLASSES_JSON_PATH.exists():
             with open(CLASSES_JSON_PATH, "r", encoding="utf-8") as f:
                 meta = json.load(f)
-                _class_names = meta.get("classes", [])
-        elif CLASS_NAMES_TXT_PATH.exists():
+                json_classes = meta.get("classes")
+        text_classes = None
+        if CLASS_NAMES_TXT_PATH.exists():
             with open(CLASS_NAMES_TXT_PATH, "r", encoding="utf-8") as f:
-                _class_names = [
-                    line.strip().split(": ", 1)[1]
-                    for line in f
-                    if line.strip() and ": " in line
-                ]
-        if not _class_names:
+                parsed = []
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    index, separator, label = line.partition(": ")
+                    if not separator or not index.isdigit() or int(index) != len(parsed) or not label:
+                        raise RuntimeError("Invalid indexed class label in class_names.txt")
+                    parsed.append(label)
+                text_classes = parsed
+        if json_classes is not None and text_classes is not None and json_classes != text_classes:
+            raise RuntimeError("classes.json and class_names.txt disagree on output class order")
+        _class_names = json_classes if json_classes is not None else (text_classes or [])
+        if (not isinstance(_class_names, list) or not _class_names
+                or not all(isinstance(label, str) and label for label in _class_names)
+                or len(_class_names) != len(set(_class_names))):
             raise RuntimeError("Failed to load class names list.")
     return _class_names
+
+
+def preprocess_image(image: Image.Image) -> np.ndarray:
+    """Apply the upstream model-card preprocessing and return a float32 NCHW batch."""
+    rgb = image.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+    arr = np.asarray(rgb, dtype=np.float32) / 255.0
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+    return np.expand_dims(np.transpose(arr, (2, 0, 1)), axis=0).astype(np.float32)
 
 
 def parse_class_label(class_name: str) -> tuple[str, str, bool]:
@@ -99,16 +119,7 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
         img_np = np.array(rgb_image, dtype=np.float32)
         pixel_std = float(np.std(img_np))
 
-        # 2. Preprocess: Resize to 224x224 (Bilinear)
-        resized = rgb_image.resize((224, 224), Image.Resampling.BILINEAR)
-
-    # 3. Normalize: Scale to [0, 1] then apply standard ImageNet mean & std
-    arr = np.array(resized, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-
-    # 4. Transpose to CHW and add batch dimension -> (1, 3, 224, 224)
-    arr = np.transpose(arr, (2, 0, 1))
-    tensor = np.expand_dims(arr, axis=0).astype(np.float32)
+        tensor = preprocess_image(rgb_image)
 
     # 5. Run ONNX model inference
     session = get_inference_session()
@@ -118,6 +129,8 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
         raise RuntimeError("Model returned an unexpected output shape")
     logits = np.asarray(outputs[0][0], dtype=np.float32)
     classes = get_class_names()
+    if len(classes) != 38:
+        raise RuntimeError(f"Expected 38 model labels; found {len(classes)}")
     if logits.ndim != 1 or logits.size != len(classes):
         raise RuntimeError("Model output count does not match the class label list")
     if not np.isfinite(logits).all():
@@ -148,7 +161,6 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
             "crop": c_name,
             "condition": cond,
             "confidence": round(float(probs[idx]) * 100, 2),
-            "probability": float(probs[idx]),
         })
 
     # A softmax score is not calibrated and cannot establish in-domain input.

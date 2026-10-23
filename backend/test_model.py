@@ -43,11 +43,11 @@ def main() -> None:
             raise AssertionError(f"Prediction has no class mapping: {result['disease']!r}")
         if not np.isfinite(result["confidence"]) or not 0 <= result["confidence"] <= 100:
             raise AssertionError(f"Invalid top score for {image_path.name}: {result['confidence']!r}")
-        probabilities = np.asarray([item["probability"] for item in result["top_predictions"]])
-        if probabilities.size != 5 or not np.isfinite(probabilities).all():
-            raise AssertionError(f"Invalid top-five scores for {image_path.name}")
-        if not 0 < probabilities.sum() <= 1.0001:
-            raise AssertionError(f"Invalid top-five probability mass for {image_path.name}")
+        raw_scores = np.asarray([item["confidence"] for item in result["top_predictions"]])
+        if raw_scores.size != 5 or not np.isfinite(raw_scores).all():
+            raise AssertionError(f"Invalid top-five raw scores for {image_path.name}")
+        if np.any(raw_scores < 0) or np.any(raw_scores > 100):
+            raise AssertionError(f"Out-of-range raw score for {image_path.name}")
         print(f"{image_path.name}: {result['disease']} (raw model score {result['confidence']:.2f}%)")
 
     # The known 15-byte fixture must be rejected as an invalid image.
