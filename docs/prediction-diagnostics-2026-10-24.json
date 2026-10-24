@@ -1,0 +1,304 @@
+{
+  "model": "checked-in EfficientNetV2-S ONNX",
+  "sample_count": 3,
+  "accuracy": "not calculated; only one fixture has a known label and none is an independent labeled evaluation set",
+  "probes": [
+    {
+      "image_sha256": "cc34c72a9d19c74ab2fe86204143856e370d0c981a90382535811b262bb15dda",
+      "image_dimensions": [
+        256,
+        256
+      ],
+      "model_input": {
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "dtype": "float32",
+        "minimum": -1.7582842111587524,
+        "maximum": 2.0996952056884766
+      },
+      "raw_logits": [
+        5.978224277496338,
+        0.22107210755348206,
+        -0.007799625396728516,
+        -0.0028592757880687714,
+        0.1283816546201706,
+        0.2722034156322479,
+        0.1776500791311264,
+        0.15578040480613708,
+        0.06900084763765335,
+        0.2272283285856247,
+        0.14536389708518982,
+        0.0781058594584465,
+        0.07966653257608414,
+        0.22763806581497192,
+        0.19322557747364044,
+        0.1090991348028183,
+        0.027352560311555862,
+        0.21257007122039795,
+        0.04357925429940224,
+        0.10433115065097809,
+        0.21190543472766876,
+        0.23667848110198975,
+        0.2814974784851074,
+        0.1339813470840454,
+        0.17515641450881958,
+        0.04934104532003403,
+        0.18898621201515198,
+        0.19080646336078644,
+        0.035579316318035126,
+        0.1619739979505539,
+        -0.10103093087673187,
+        0.11763478815555573,
+        0.14754657447338104,
+        0.028846293687820435,
+        -0.04079614579677582,
+        0.08135765790939331,
+        0.14057081937789917,
+        0.2015436440706253
+      ],
+      "top_predictions": [
+        {
+          "index": 0,
+          "label": "Apple___Apple_scab",
+          "raw_logit": 5.978224277496338,
+          "softmax_score_uncalibrated_percent": 90.34607696533203
+        },
+        {
+          "index": 22,
+          "label": "Potato___healthy",
+          "raw_logit": 0.2814974784851074,
+          "softmax_score_uncalibrated_percent": 0.30328595638275146
+        },
+        {
+          "index": 5,
+          "label": "Cherry_(including_sour)___Powdery_mildew",
+          "raw_logit": 0.2722034156322479,
+          "softmax_score_uncalibrated_percent": 0.3004802465438843
+        },
+        {
+          "index": 21,
+          "label": "Potato___Late_blight",
+          "raw_logit": 0.23667848110198975,
+          "softmax_score_uncalibrated_percent": 0.28999313712120056
+        },
+        {
+          "index": 13,
+          "label": "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
+          "raw_logit": 0.22763806581497192,
+          "softmax_score_uncalibrated_percent": 0.2873832881450653
+        }
+      ],
+      "mapped_label": "Apple___Apple_scab",
+      "database_status": "matched",
+      "database_disease_record": {
+        "id": 12,
+        "name": "Apple Scab",
+        "crop": "Apple"
+      },
+      "probe_type": "leaf image fixture",
+      "source_note": "checked-in model-card sample; Apple scab label from model documentation"
+    },
+    {
+      "image_sha256": "5b7ccf1dbae091f78b4028cae7f85e97f1e51c6dc0f296a914e29a5b4900b4c9",
+      "image_dimensions": [
+        920,
+        518
+      ],
+      "model_input": {
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "dtype": "float32",
+        "minimum": -2.1179039478302,
+        "maximum": 1.8683472871780396
+      },
+      "raw_logits": [
+        -0.9957560896873474,
+        -0.8402480483055115,
+        -1.3336231708526611,
+        -0.8249720335006714,
+        -1.0651954412460327,
+        -1.0209096670150757,
+        0.132179394364357,
+        0.9117295742034912,
+        -0.9407550692558289,
+        -2.0394296646118164,
+        -0.09525664150714874,
+        -0.455287367105484,
+        -0.6739426255226135,
+        -0.5479539632797241,
+        -1.114583134651184,
+        -1.2789651155471802,
+        -1.1980832815170288,
+        -1.1634467840194702,
+        -1.293405532836914,
+        0.8197476267814636,
+        -1.2253353595733643,
+        -0.9565438032150269,
+        -0.9040167927742004,
+        -0.3881171643733978,
+        -1.6343916654586792,
+        -0.24904890358448029,
+        0.8159893155097961,
+        -1.4516569375991821,
+        -1.9521522521972656,
+        3.8857498168945312,
+        -0.937626302242279,
+        -0.7291573882102966,
+        -0.7614266872406006,
+        -1.30099356174469,
+        -1.131881594657898,
+        -1.7496182918548584,
+        -0.736740231513977,
+        -1.2802485227584839
+      ],
+      "top_predictions": [
+        {
+          "index": 29,
+          "label": "Tomato___Early_blight",
+          "raw_logit": 3.8857498168945312,
+          "softmax_score_uncalibrated_percent": 69.87884521484375
+        },
+        {
+          "index": 7,
+          "label": "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot",
+          "raw_logit": 0.9117295742034912,
+          "softmax_score_uncalibrated_percent": 3.570632219314575
+        },
+        {
+          "index": 19,
+          "label": "Pepper,_bell___healthy",
+          "raw_logit": 0.8197476267814636,
+          "softmax_score_uncalibrated_percent": 3.2568509578704834
+        },
+        {
+          "index": 26,
+          "label": "Strawberry___Leaf_scorch",
+          "raw_logit": 0.8159893155097961,
+          "softmax_score_uncalibrated_percent": 3.244633197784424
+        },
+        {
+          "index": 6,
+          "label": "Cherry_(including_sour)___healthy",
+          "raw_logit": 0.132179394364357,
+          "softmax_score_uncalibrated_percent": 1.6375359296798706
+        }
+      ],
+      "mapped_label": "Tomato___Early_blight",
+      "database_status": "matched",
+      "database_disease_record": {
+        "id": 2,
+        "name": "Tomato Early Blight",
+        "crop": "Tomato"
+      },
+      "probe_type": "leaf image fixture",
+      "source_note": "checked-in unlabeled image fixture; original source/ground truth unknown"
+    },
+    {
+      "image_sha256": "29997f872d27307f8589078018d27285de9b905c11fee972fe49a89cec29a9af",
+      "image_dimensions": [
+        2720,
+        2880
+      ],
+      "model_input": {
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "dtype": "float32",
+        "minimum": -2.1179039478302,
+        "maximum": 2.6225709915161133
+      },
+      "raw_logits": [
+        -0.9515677690505981,
+        -1.596732497215271,
+        -0.9640658497810364,
+        -1.0806668996810913,
+        -1.4429570436477661,
+        -1.6255098581314087,
+        -1.0124326944351196,
+        -1.087913990020752,
+        0.13163834810256958,
+        -1.0197430849075317,
+        -0.495513379573822,
+        -1.347531795501709,
+        -1.3981322050094604,
+        -1.3342649936676025,
+        -0.9010018110275269,
+        -1.9072165489196777,
+        -2.06518816947937,
+        2.039167642593384,
+        -1.4892938137054443,
+        -0.19299380481243134,
+        -1.6867187023162842,
+        -0.8641296625137329,
+        -1.2138839960098267,
+        -0.8339024782180786,
+        -0.9021249413490295,
+        -1.8289573192596436,
+        -1.3122961521148682,
+        -1.376328706741333,
+        -2.178097724914551,
+        3.8146677017211914,
+        -1.9681644439697266,
+        -0.6422228217124939,
+        0.3635546863079071,
+        -1.2022615671157837,
+        -1.9214152097702026,
+        -2.2680654525756836,
+        0.30473384261131287,
+        -0.8641237020492554
+      ],
+      "top_predictions": [
+        {
+          "index": 29,
+          "label": "Tomato___Early_blight",
+          "raw_logit": 3.8146677017211914,
+          "softmax_score_uncalibrated_percent": 67.63077545166016
+        },
+        {
+          "index": 17,
+          "label": "Peach___healthy",
+          "raw_logit": 2.039167642593384,
+          "softmax_score_uncalibrated_percent": 11.45656681060791
+        },
+        {
+          "index": 32,
+          "label": "Tomato___Septoria_leaf_spot",
+          "raw_logit": 0.3635546863079071,
+          "softmax_score_uncalibrated_percent": 2.1445937156677246
+        },
+        {
+          "index": 36,
+          "label": "Tomato___Tomato_mosaic_virus",
+          "raw_logit": 0.30473384261131287,
+          "softmax_score_uncalibrated_percent": 2.022084951400757
+        },
+        {
+          "index": 8,
+          "label": "Corn_(maize)___Common_rust_",
+          "raw_logit": 0.13163834810256958,
+          "softmax_score_uncalibrated_percent": 1.7006893157958984
+        }
+      ],
+      "mapped_label": "Tomato___Early_blight",
+      "database_status": "matched",
+      "database_disease_record": {
+        "id": 2,
+        "name": "Tomato Early Blight",
+        "crop": "Tomato"
+      },
+      "probe_type": "non-leaf unsupported-input probe",
+      "source_note": "Historical Plant Guard AI diagram recovered in memory from commit 962550cf; temporary file removed after inference"
+    }
+  ]
+}

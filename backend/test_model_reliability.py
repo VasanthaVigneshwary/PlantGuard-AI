@@ -94,28 +94,44 @@ class ModelReliabilityTests(unittest.TestCase):
             image_path.unlink(missing_ok=True)
             directory.rmdir()
 
-    def test_low_detail_image_warns_and_score_stays_uncalibrated(self):
+    def test_low_detail_image_is_rejected_before_it_can_get_a_disease_label(self):
         directory = BACKEND_DIR / ".test-model-reliability-tmp"
         directory.mkdir(exist_ok=True)
         try:
             image_path = directory / "low-detail.png"
             Image.new("RGB", (64, 64), (128, 128, 128)).save(image_path)
-            result = prediction.predict_disease(image_path)
+            with self.assertRaisesRegex(prediction.ImageQualityError, "too little visual contrast"):
+                prediction.predict_disease(image_path)
         finally:
             image_path.unlink(missing_ok=True)
             directory.rmdir()
-        self.assertEqual(result["status"], "Uncalibrated model score")
-        self.assertIn("little visual contrast", result["uncertainty_warning"])
-        self.assertIn("not calibrated", result["uncertainty_warning"])
-        self.assertIn(result["disease"], prediction.get_class_names())
-        self.assertTrue(all("probability" not in item for item in result["top_predictions"]))
-        self.assertGreaterEqual(result["confidence"], 0)
-        self.assertLessEqual(result["confidence"], 100)
 
     def test_any_image_result_warns_that_unsupported_inputs_can_get_a_class(self):
         result = prediction.predict_disease(BACKEND_DIR.parent / "test_images" / "sample_leaf.jpg")
         self.assertIn("unsupported images may still receive a class prediction", result["uncertainty_warning"])
         self.assertEqual(result["status"], "Uncalibrated model score")
+
+    def test_distinct_real_images_produce_distinct_preprocessed_tensors_and_logits(self):
+        project_root = BACKEND_DIR.parent
+        image_paths = (
+            project_root / "test_images" / "sample_leaf.jpg",
+            BACKEND_DIR / "uploads" / "leaf-spot-fungus-920x518.webp",
+        )
+        self.assertTrue(all(path.is_file() for path in image_paths))
+        tensors = []
+        logits = []
+        session = prediction.get_inference_session()
+        input_name = session.get_inputs()[0].name
+        for image_path in image_paths:
+            with Image.open(image_path) as image:
+                tensors.append(prediction.preprocess_image(image))
+            logits.append(np.asarray(session.run(None, {input_name: tensors[-1]})[0][0]))
+
+        self.assertFalse(np.array_equal(tensors[0], tensors[1]))
+        self.assertFalse(np.allclose(logits[0], logits[1]))
+        first_prediction = prediction.predict_disease(image_paths[0])["disease"]
+        second_prediction = prediction.predict_disease(image_paths[1])["disease"]
+        self.assertNotEqual(first_prediction, second_prediction)
 
     def test_evaluator_reports_metrics_for_a_labeled_independent_folder(self):
         root = BACKEND_DIR / ".test-model-reliability-tmp"

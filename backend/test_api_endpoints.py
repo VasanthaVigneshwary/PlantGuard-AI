@@ -1,12 +1,14 @@
 """Database-isolated tests for the plant upload API."""
 
 import os
+from io import BytesIO
 from pathlib import Path
 import sys
 import unittest
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
@@ -59,6 +61,16 @@ class PlantApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         predict.assert_not_called()
 
+    def test_low_detail_upload_gets_actionable_client_error(self):
+        image_buffer = BytesIO()
+        Image.new("RGB", (64, 64), (128, 128, 128)).save(image_buffer, format="PNG")
+        response = self.client.post(
+            "/api/upload",
+            files={"file": ("low-detail.png", image_buffer.getvalue(), "image/png")},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("too little visual contrast", response.json()["detail"])
+
     def test_prediction_without_knowledge_record_is_honest_and_saved(self):
         seen_temp_paths = []
 
@@ -99,6 +111,30 @@ class PlantApiTests(unittest.TestCase):
         self.assertIsNone(save_prediction.call_args.kwargs["disease_id"])
         self.assertIsNone(save_prediction.call_args.kwargs["image_url"])
         self.assertTrue(all(not path.exists() for path in seen_temp_paths))
+
+    def test_separate_real_uploads_are_inferred_from_their_own_image_bytes(self):
+        image_paths = (
+            PROJECT_ROOT / "test_images" / "sample_leaf.jpg",
+            BACKEND_DIR / "uploads" / "leaf-spot-fungus-920x518.webp",
+        )
+        image_bytes = [path.read_bytes() for path in image_paths]
+        self.assertNotEqual(image_bytes[0], image_bytes[1])
+
+        with (
+            patch("routes.plant.get_disease_details_by_prediction", return_value=None),
+            patch("routes.plant.save_prediction", return_value=1),
+        ):
+            responses = [
+                self.client.post(
+                    "/api/upload",
+                    files={"file": (path.name, contents, "application/octet-stream")},
+                )
+                for path, contents in zip(image_paths, image_bytes)
+            ]
+
+        self.assertEqual([response.status_code for response in responses], [200, 200])
+        predictions = [response.json()["prediction"] for response in responses]
+        self.assertEqual(predictions, ["Apple___Apple_scab", "Tomato___Early_blight"])
 
     def test_knowledge_database_failure_returns_service_unavailable(self):
         with (

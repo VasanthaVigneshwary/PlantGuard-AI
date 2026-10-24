@@ -132,6 +132,8 @@ const translations: Record<Language, Record<string, string>> = {
     confidence: "Model Score",
     guidance: "Guidance",
     detectedCondition: "Detected Condition",
+    candidateCondition: "Model's Candidate Classification",
+    candidateCrop: "Candidate crop class:",
     modelConfidence: "Raw Model Score (Not Calibrated)",
     whatDoesThisMean: "What does this result mean?",
     aboutCondition: "About This Condition",
@@ -272,6 +274,8 @@ const translations: Record<Language, Record<string, string>> = {
     confidence: "மாதிரி மதிப்பெண்",
     guidance: "வழிகாட்டல்",
     detectedCondition: "கண்டறியப்பட்ட நிலை",
+    candidateCondition: "மாதிரியின் சாத்தியமான வகைப்பாடு",
+    candidateCrop: "சாத்தியமான பயிர் வகுப்பு:",
     modelConfidence: "மாதிரியின் மூல மதிப்பெண் (அளவுத்திருத்தம் செய்யப்படவில்லை)",
     whatDoesThisMean: "இந்த முடிவு அர்த்தப்படுத்துவது எது?",
     aboutCondition: "இந்த நிலை பற்றிய தகவல்",
@@ -673,9 +677,10 @@ export default function Home() {
       }
     } catch (err) {
       console.error(err);
-
       setError(
-        "Unable to connect to Plant Guard AI backend. Make sure FastAPI is running."
+        err instanceof Error && err.name === "Error"
+          ? err.message
+          : "Unable to connect to Plant Guard AI backend. Make sure FastAPI is running."
       );
     } finally {
       setLoading(false);
@@ -1400,7 +1405,7 @@ export default function Home() {
                 </div>
 
                 <p className="mt-5 text-sm font-bold uppercase tracking-widest text-green-100">
-                  {t.detectedCondition}
+                  {t.candidateCondition}
                 </p>
 
                 <h2 className="mt-2 text-4xl font-black md:text-5xl">
@@ -1408,7 +1413,7 @@ export default function Home() {
                 </h2>
 
                 <p className="mt-4 text-lg text-green-50">
-                  {language === "ta" ? "தாவர அடையாளம்:" : "Plant identified as"}{" "}
+                  {t.candidateCrop}{" "}
                   <span className="font-bold">
                     {diseaseData.plant}
                   </span>

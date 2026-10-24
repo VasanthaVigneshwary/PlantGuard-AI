@@ -6,7 +6,7 @@ import io
 import tempfile
 from pathlib import Path
 from PIL import Image
-from ml.predict import predict_disease
+from ml.predict import ImageQualityError, predict_disease
 from services.database_service import (
     get_disease_details_by_prediction,
     get_disease_details,
@@ -376,6 +376,8 @@ async def upload_plant_image(
             buffer.write(contents)
 
         result = predict_disease(file_path)
+    except ImageQualityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Plant image inference failed")
         raise HTTPException(

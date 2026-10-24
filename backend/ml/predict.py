@@ -21,6 +21,10 @@ _session = None
 _class_names = []
 
 
+class ImageQualityError(ValueError):
+    """Raised when an image lacks enough visible detail for inference."""
+
+
 def get_inference_session() -> ort.InferenceSession:
     """Load and cache ONNX runtime session (singleton)."""
     global _session
@@ -136,6 +140,11 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
         # Check for near-blank or monochromatic images
         img_np = np.array(rgb_image, dtype=np.float32)
         pixel_std = float(np.std(img_np))
+        if pixel_std < 12.0:
+            raise ImageQualityError(
+                "The image has too little visual contrast or leaf detail. "
+                "Please upload a clear, well-lit photo of a plant leaf."
+            )
 
         tensor = preprocess_image(rgb_image)
 
@@ -188,12 +197,6 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
         "may still receive a class prediction. Treat the result as a candidate and "
         "verify it using plant symptoms or qualified agricultural guidance."
     )
-    if pixel_std < 12.0:
-        uncertainty_warning = (
-            "The image has little visual contrast or leaf detail. Please provide a "
-            "clear, well-lit photo of a plant leaf. The model score is not calibrated."
-        )
-
     return {
         "disease": predicted_class,
         "crop": crop_name,
