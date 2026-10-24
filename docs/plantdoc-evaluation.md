@@ -10,7 +10,8 @@ the original archive path remains in the manifest and image bytes are unchanged.
 ## Prepare and rerun
 
 The archive is available from the official repository at
-<https://github.com/pratikkayal/PlantDoc-Dataset>. From the repository root:
+<https://github.com/pratikkayal/PlantDoc-Dataset>, pinned to snapshot
+`5467f6012d78d1c446145d5f582da6096f852ae8`. From the repository root:
 
 ```powershell
 .\scripts\plantdoc-evaluate.ps1 -Prepare

@@ -27,6 +27,8 @@ sys.path.insert(0, str(BACKEND_DIR))
 from ml.predict import get_class_names, predict_disease  # noqa: E402
 
 SOURCE_URL = "https://github.com/pratikkayal/PlantDoc-Dataset"
+SOURCE_REVISION = "5467f6012d78d1c446145d5f582da6096f852ae8"
+SOURCE_ARCHIVE_URL = f"https://codeload.github.com/pratikkayal/PlantDoc-Dataset/zip/{SOURCE_REVISION}"
 REPO_LICENSE = "CC BY 4.0"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 ARCHIVE_ROOT = "PlantDoc-Dataset-master"
@@ -167,6 +169,7 @@ def prepare(zip_path: Path, destination: Path) -> dict:
                 "source_archive_path": info.filename,
                 "ground_truth_label": label,
                 "source": SOURCE_URL,
+                "source_revision": SOURCE_REVISION,
                 "split": split,
                 "width": width,
                 "height": height,
@@ -183,7 +186,8 @@ def prepare(zip_path: Path, destination: Path) -> dict:
     attribution.write_text(
         "PlantDoc Dataset by Davinder Singh, Naman Jain, Pranjali Jain, Pratik Kayal, "
         "Sudhakar Kumawat, and Nipun Batra\n"
-        f"Source: {SOURCE_URL}\nLicense: {REPO_LICENSE} (https://creativecommons.org/licenses/by/4.0/)\n"
+        f"Source: {SOURCE_URL} at commit {SOURCE_REVISION}\n"
+        f"License: {REPO_LICENSE} (https://creativecommons.org/licenses/by/4.0/)\n"
         "This local copy retains the repository's train/test folders and class-folder labels. "
         "Image contents are unchanged. Some filenames were percent-encoded or suffixed to "
         "avoid Windows-invalid names and case-insensitive collisions; manifest.jsonl records "
@@ -298,6 +302,8 @@ def evaluate(dataset_root: Path) -> dict:
     excluded = Counter(r["ground_truth_label"] for r in test_rows if r["ground_truth_label"] not in mapping)
     report = {
         "dataset_source": SOURCE_URL,
+        "dataset_source_revision": SOURCE_REVISION,
+        "dataset_archive_url": SOURCE_ARCHIVE_URL,
         "dataset_root": str(dataset_root.resolve()),
         "evaluation_split": "test only; original train images were not evaluated or used for training/tuning",
         "test_image_count": len(test_rows),
