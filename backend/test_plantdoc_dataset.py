@@ -61,6 +61,8 @@ class PlantDocDatasetTests(unittest.TestCase):
             self.assertEqual(report["test_images_excluded_for_train_overlap"], 1)
             self.assertEqual(report["accuracy"], 1.0)
             self.assertEqual(report["label_coverage"]["ambiguous"][0]["plantdoc_label"], "Apple leaf")
+            self.assertEqual(report["model_classes_covered_by_plantdoc_labels"], ["Apple___Apple_scab"])
+            self.assertEqual(len(report["model_classes_without_compatible_plantdoc_label"]), 2)
             self.assertEqual(report["train_test_sha256_overlap_count"], 1)
 
 

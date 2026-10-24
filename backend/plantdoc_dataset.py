@@ -181,7 +181,8 @@ def prepare(zip_path: Path, destination: Path) -> dict:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     attribution = destination / "ATTRIBUTION.txt"
     attribution.write_text(
-        "PlantDoc Dataset by Pratik Kayal and contributors\n"
+        "PlantDoc Dataset by Davinder Singh, Naman Jain, Pranjali Jain, Pratik Kayal, "
+        "Sudhakar Kumawat, and Nipun Batra\n"
         f"Source: {SOURCE_URL}\nLicense: {REPO_LICENSE} (https://creativecommons.org/licenses/by/4.0/)\n"
         "This local copy retains the repository's train/test folders and class-folder labels. "
         "Image contents are unchanged. Some filenames were percent-encoded or suffixed to "
@@ -236,6 +237,7 @@ def evaluate(dataset_root: Path) -> dict:
     labels = sorted({row["ground_truth_label"] for row in rows})
     audit = label_audit(labels, classes)
     mapping = {item["plantdoc_label"]: item["model_class"] for item in audit["exact"] + audit["compatible"]}
+    covered_model_classes = sorted(set(mapping.values()))
     test_rows = [r for r in rows if r["split"] == "test"]
     train_hashes = {r["sha256"] for r in rows if r["split"] == "train"}
     overlap_test_rows = [r for r in test_rows if r["sha256"] in train_hashes]
@@ -309,6 +311,8 @@ def evaluate(dataset_root: Path) -> dict:
         "per_class_precision_recall": per_class,
         "confusion_matrix": {"labels": classes, "counts": confusion},
         "label_coverage": audit,
+        "model_classes_covered_by_plantdoc_labels": covered_model_classes,
+        "model_classes_without_compatible_plantdoc_label": sorted(set(classes) - set(covered_model_classes)),
         "excluded_test_images_by_label": dict(excluded),
         "train_test_sha256_overlap_count": len(overlap),
         "train_test_sha256_overlap": overlap,
