@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateTreatmentQuantity,
-  getCalculableAreaRates,
-  validateAreaInput,
+  formatCalculatedQuantity,
+  getCalculableRates,
+  getAreaSquareFeet,
+  getRatesForMode,
+  validateQuantityInput,
 } from "../lib/treatment-calculator.mjs";
+import {
+  getDisplayableDiseaseGuidance,
+  getGuidanceUnavailableMessage,
+} from "../lib/disease-guidance.mjs";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -17,6 +24,7 @@ interface PredictionResult {
   status?: string;
   uncertainty_warning?: string | null;
   is_healthy?: boolean;
+  is_uncertain?: boolean;
   history_saved?: boolean;
   history_warning?: string | null;
   disease: {
@@ -24,16 +32,25 @@ interface PredictionResult {
     name: string;
     crop_name: string;
     description: string | null;
+    verified?: boolean;
+    source_url?: string | null;
+    disease_id?: number;
   };
   symptoms: {
     id: number;
     name: string;
     description: string;
+    verified?: boolean;
+    source_url?: string | null;
+    disease_id?: number;
   }[];
   causes: {
     id: number;
     name: string;
     description: string;
+    verified?: boolean;
+    source_url?: string | null;
+    disease_id?: number;
   }[];
   treatments: {
     id: number;
@@ -42,6 +59,9 @@ interface PredictionResult {
     description: string;
     instructions: string;
     precautions: string;
+    verified?: boolean;
+    source_url?: string | null;
+    disease_id?: number;
     application_rates: {
       id: number;
       application_method: string | null;
@@ -53,12 +73,18 @@ interface PredictionResult {
       product_formulation: string;
       source_url: string;
       disease_id: number;
+      measurement_unit_key?: string;
+      basis_key?: string;
+      displayBasis?: string;
     }[];
   }[];
   prevention: {
     id: number;
     title: string;
     description: string;
+    verified?: boolean;
+    source_url?: string | null;
+    disease_id?: number;
   }[];
 }
 
@@ -70,6 +96,7 @@ interface HistoryItem {
   disease_name: string;
   disease_id: number | null;
   model_version: string | null;
+  image_url?: string | null;
 }
 
 interface DatabaseDiseaseInfo {
@@ -78,6 +105,21 @@ interface DatabaseDiseaseInfo {
   causes: PredictionResult["causes"];
   treatment: PredictionResult["treatments"];
   prevention: PredictionResult["prevention"];
+}
+
+interface CropOption {
+  id: number;
+  name: string;
+}
+
+interface DiseaseOption {
+  id: number;
+  name: string;
+  crop_name: string;
+}
+
+interface CalculatorDiseaseDetails extends DiseaseOption {
+  treatments: PredictionResult["treatments"];
 }
 
 interface NotificationItem {
@@ -102,7 +144,7 @@ const translations: Record<Language, Record<string, string>> = {
     navAbout: "About",
     navHistory: "History",
     historyTitle: "Prediction History",
-    historySubtitle: "Saved model results from PostgreSQL. Uploaded images are not retained.",
+    historySubtitle: "Prediction images are saved and can be viewed in prediction history.",
     historyLoading: "Loading prediction history...",
     historyEmpty: "No saved predictions yet.",
     historyError: "Unable to load prediction history.",
@@ -134,6 +176,12 @@ const translations: Record<Language, Record<string, string>> = {
     detectedCondition: "Detected Condition",
     candidateCondition: "Model's Candidate Classification",
     candidateCrop: "Candidate crop class:",
+    healthyResult: "No disease detected — the leaf may be healthy.",
+    possibleHealthyCrop: "Possible healthy leaf from:",
+    healthyResultNote: "This model cannot confirm that a leaf is healthy. If you can still see symptoms, try another clear photo or ask a qualified agricultural expert.",
+    uncertainResult: "Unable to identify reliably",
+    modelCandidateLabel: "Model class candidate:",
+    uncertainResultNote: "The model does not include both healthy and diseased classes for this crop, so it cannot distinguish them reliably. Try a clear single-leaf photo or consult a qualified agricultural expert.",
     modelConfidence: "Raw Model Score (Not Calibrated)",
     whatDoesThisMean: "What does this result mean?",
     aboutCondition: "About This Condition",
@@ -143,13 +191,35 @@ const translations: Record<Language, Record<string, string>> = {
     applicationRates: "Application Rates",
     preventionTips: "Prevention Tips",
     treatmentCalculator: "Treatment Calculator",
-    affectedArea: "Affected area",
+    affectedArea: "Quantity",
+    quantityMode: "Quantity mode",
     acres: "Acres",
-    areaHelp: "Enter the affected area in acres. Calculation uses exact per-acre units only.",
-    areaEmpty: "Enter the affected area.",
+    cents: "Cents",
+    numberOfPlants: "Number of Plants",
+    quantityHelp: "1 acre = 100 cents = 43,560 sq ft; 1 cent = 435.6 sq ft. Plant counts use only per-plant rates.",
+    convertedArea: "Converted area",
+    quantityPlaceholder: "Enter a positive quantity",
+    quantityEmpty: "Enter a quantity.",
+    quantityPositive: "Quantity must be greater than zero.",
+    selectedContext: "Prediction context",
+    selectCrop: "Crop",
+    selectDisease: "Disease or treatment context",
+    chooseDisease: "Select a disease",
+    loadingDisease: "Loading disease information...",
+    diseaseLoadFailed: "Disease details could not be loaded. Select another disease or keep the prediction context.",
+    noDiseasesForCrop: "No database disease entries are available for this crop.",
+    cropLabel: "Crop",
+    diseaseLabel: "Disease",
+    enteredQuantity: "Entered quantity",
+    convertedQuantity: "Converted amount for this rate",
+    squareFeet: "Area in square feet",
+    candidateCalculation: "This estimate uses the model's candidate disease prediction. Confirm the disease and follow the current product label before applying any treatment.",
+    manualCalculation: "This estimate uses the selected knowledge-base disease entry. Confirm that it matches the crop before applying treatment.",
+    wholePlantCount: "Enter a whole number of plants.",
+    modeRateUnavailable: "No verified application rate is available for this quantity mode. Do not convert between area and plant count without a verified rule.",
     areaInvalid: "Enter a valid number using digits and a decimal point only.",
     areaPositive: "Affected area must be greater than zero.",
-    rateUnavailable: "Calculation is unavailable because no verified rate matches this disease, product/formulation, and supported area unit. Your area is not used to estimate a dose.",
+    rateUnavailable: "Application rate not available for this crop and treatment. Consult the product label or a qualified agricultural expert.",
     sourceReference: "Verified source",
     selectedProduct: "Selected Product",
     applicationMethod: "Application Method",
@@ -177,6 +247,10 @@ const translations: Record<Language, Record<string, string>> = {
     analyzePlantSubtitle: "Upload a clear image of a plant leaf and let the AI model analyze it.",
     selectFilePrompt: "Choose a clear photo showing the plant leaf. Better images can help the model produce a more useful prediction.",
     supportedFormats: "Supported image formats: JPG, JPEG, PNG, WEBP",
+    invalidImageType: "Choose a JPG, JPEG, PNG, or WEBP image.",
+    unreadableImage: "This file could not be read as an image. Choose another image.",
+    imageTooSmall: "The image is too small. Choose an image at least 32 pixels wide and high.",
+    imageTooLarge: "The image is too large. Choose an image with no more than 40 million pixels.",
     selectedImage: "Selected image",
     plantImagePreview: "Your plant image",
     ready: "Ready",
@@ -225,7 +299,7 @@ const translations: Record<Language, Record<string, string>> = {
     featureTreatmentCalculatorText: "Estimates treatment quantity based on affected area and the agricultural application rate.",
     readyCheckPlant: "Ready to check your plant?",
     ctaDescription: "Upload a plant leaf image and explore what Plant Guard AI can detect.",
-    footerSummary: "AI-powered plant disease detection and plant-care assistance.",
+    footerSummary: "AI-assisted plant disease screening and plant-care information.",
     quickNav: "Quick Navigation",
     homeLink: "Home",
     diseaseDetectionLink: "Disease Detection",
@@ -233,7 +307,9 @@ const translations: Record<Language, Record<string, string>> = {
     aboutLink: "About",
     projectLink: "Project",
     miniProject: "Mini Project",
-    footerCopyright: "© 2026 Plant Guard AI. Built as an academic mini-project.",
+    footerCopyright: "© Plant Guard AI",
+    footerAdvisory: "AI predictions are advisory, may be incorrect, and are not confirmed diagnoses.",
+    footerTreatmentSafety: "Follow verified product-label directions and consult a qualified agricultural expert before treatment decisions.",
     techFooterText: "AI Plant Health Assistant",
     statusLabel: "Detection system",
   },
@@ -244,7 +320,7 @@ const translations: Record<Language, Record<string, string>> = {
     navAbout: "பற்றி",
     navHistory: "வரலாறு",
     historyTitle: "கணிப்பு வரலாறு",
-    historySubtitle: "PostgreSQL-இல் சேமிக்கப்பட்ட மாதிரி முடிவுகள். பதிவேற்றிய படங்கள் சேமிக்கப்படுவதில்லை.",
+    historySubtitle: "கணிப்பு படங்கள் சேமிக்கப்படுகின்றன; அவற்றை கணிப்பு வரலாற்றில் பார்க்கலாம்.",
     historyLoading: "கணிப்பு வரலாறு ஏற்றப்படுகிறது...",
     historyEmpty: "சேமிக்கப்பட்ட கணிப்புகள் எதுவும் இல்லை.",
     historyError: "கணிப்பு வரலாற்றை ஏற்ற முடியவில்லை.",
@@ -276,6 +352,12 @@ const translations: Record<Language, Record<string, string>> = {
     detectedCondition: "கண்டறியப்பட்ட நிலை",
     candidateCondition: "மாதிரியின் சாத்தியமான வகைப்பாடு",
     candidateCrop: "சாத்தியமான பயிர் வகுப்பு:",
+    healthyResult: "நோய் கண்டறியப்படவில்லை — இலை ஆரோக்கியமாக இருக்கலாம்.",
+    possibleHealthyCrop: "ஆரோக்கியமாக இருக்கக்கூடிய இலை:",
+    healthyResultNote: "இந்த மாதிரி இலை ஆரோக்கியமானது என்பதை உறுதிப்படுத்த முடியாது. அறிகுறிகள் தொடர்ந்து தெரிந்தால், தெளிவான மற்றொரு படத்தை முயற்சிக்கவும் அல்லது தகுதியான வேளாண் நிபுணரிடம் ஆலோசனை பெறவும்.",
+    uncertainResult: "நம்பகமாக அடையாளம் காண முடியவில்லை",
+    modelCandidateLabel: "மாதிரியின் சாத்தியமான வகுப்பு:",
+    uncertainResultNote: "இந்தப் பயிருக்கான ஆரோக்கியமான மற்றும் நோயுற்ற வகுப்புகள் இரண்டும் மாதிரியில் இல்லை; எனவே அவற்றை நம்பகமாக வேறுபடுத்த முடியாது. ஒரு இலையின் தெளிவான படத்தை முயற்சிக்கவும் அல்லது தகுதியான வேளாண் நிபுணரிடம் ஆலோசனை பெறவும்.",
     modelConfidence: "மாதிரியின் மூல மதிப்பெண் (அளவுத்திருத்தம் செய்யப்படவில்லை)",
     whatDoesThisMean: "இந்த முடிவு அர்த்தப்படுத்துவது எது?",
     aboutCondition: "இந்த நிலை பற்றிய தகவல்",
@@ -285,13 +367,35 @@ const translations: Record<Language, Record<string, string>> = {
     applicationRates: "பயன்பாட்டு வீதங்கள்",
     preventionTips: "தடுப்பு குறிப்புகள்",
     treatmentCalculator: "சிகிச்சை கால்குலேட்டர்",
-    affectedArea: "பாதிக்கப்பட்ட பகுதி",
+    affectedArea: "அளவு",
+    quantityMode: "அளவு முறை",
     acres: "ஏக்கர்",
-    areaHelp: "பாதிக்கப்பட்ட பரப்பை ஏக்கரில் உள்ளிடவும். கணக்கீடு ஏக்கருக்கான பொருந்தும் அலகுகளை மட்டுமே பயன்படுத்தும்.",
-    areaEmpty: "பாதிக்கப்பட்ட பரப்பை உள்ளிடவும்.",
+    cents: "சென்ட்",
+    numberOfPlants: "தாவரங்களின் எண்ணிக்கை",
+    quantityHelp: "1 ஏக்கர் = 100 சென்ட் = 43,560 சதுர அடி; 1 சென்ட் = 435.6 சதுர அடி. தாவர எண்ணிக்கைக்கு ஒரு தாவரத்திற்கான வீதம் மட்டுமே பயன்படுத்தப்படும்.",
+    convertedArea: "மாற்றிய பரப்பளவு",
+    quantityPlaceholder: "பூஜ்ஜியத்தை விட அதிகமான அளவை உள்ளிடவும்",
+    quantityEmpty: "அளவை உள்ளிடவும்.",
+    quantityPositive: "அளவு பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்.",
+    selectedContext: "கணிப்பு சூழல்",
+    selectCrop: "பயிர்",
+    selectDisease: "நோய் அல்லது சிகிச்சை சூழல்",
+    chooseDisease: "நோயைத் தேர்ந்தெடுக்கவும்",
+    loadingDisease: "நோய் தகவல் ஏற்றப்படுகிறது...",
+    diseaseLoadFailed: "நோய் விவரங்களை ஏற்ற முடியவில்லை. வேறு நோயைத் தேர்ந்தெடுக்கவும் அல்லது கணிப்பு சூழலைப் பயன்படுத்தவும்.",
+    noDiseasesForCrop: "இந்தப் பயிருக்கு தரவுத்தள நோய் பதிவு இல்லை.",
+    cropLabel: "பயிர்",
+    diseaseLabel: "நோய்",
+    enteredQuantity: "உள்ளிட்ட அளவு",
+    convertedQuantity: "இந்த வீதத்திற்கான மாற்றிய அளவு",
+    squareFeet: "சதுர அடியில் பரப்பளவு",
+    candidateCalculation: "இந்த மதிப்பீடு மாதிரியின் சாத்தியமான நோய் கணிப்பைப் பயன்படுத்துகிறது. சிகிச்சை செய்வதற்கு முன் நோயை உறுதிப்படுத்தி, தற்போதைய தயாரிப்பு லேபிளைப் பின்பற்றவும்.",
+    manualCalculation: "இந்த மதிப்பீடு தேர்ந்தெடுத்த அறிவுத் தரவுத்தள நோய் பதிவைப் பயன்படுத்துகிறது. சிகிச்சைக்கு முன் அது பயிருடன் பொருந்துகிறதா என்பதை உறுதிப்படுத்தவும்.",
+    wholePlantCount: "தாவரங்களின் முழு எண்ணிக்கையை உள்ளிடவும்.",
+    modeRateUnavailable: "இந்த அளவு முறைக்கு சரிபார்க்கப்பட்ட பயன்பாட்டு வீதம் இல்லை. சரிபார்க்கப்பட்ட விதியின்றி பரப்பளவையும் தாவர எண்ணிக்கையையும் மாற்ற வேண்டாம்.",
     areaInvalid: "எண்கள் மற்றும் தசமப் புள்ளியை மட்டும் பயன்படுத்தி சரியான எண்ணை உள்ளிடவும்.",
     areaPositive: "பாதிக்கப்பட்ட பரப்பு பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்.",
-    rateUnavailable: "இந்த நோய், தயாரிப்பு/கலவை மற்றும் ஆதரிக்கப்படும் பரப்பளவு அலகுக்கு சரிபார்க்கப்பட்ட வீதம் இல்லை; கணக்கீடு கிடைக்காது. உங்கள் பரப்பளவை மருந்தளவை ஊகிக்கப் பயன்படுத்தமாட்டோம்.",
+    rateUnavailable: "இந்த பயிர் மற்றும் சிகிச்சைக்கான பயன்பாட்டு வீதம் கிடைக்கவில்லை. தயாரிப்பு லேபிளை அல்லது தகுதியான வேளாண் நிபுணரை அணுகவும்.",
     sourceReference: "சரிபார்க்கப்பட்ட ஆதாரம்",
     selectedProduct: "தேர்ந்தெடுக்கப்பட்ட தயாரிப்பு",
     applicationMethod: "பயன்பாட்டு முறை",
@@ -319,6 +423,10 @@ const translations: Record<Language, Record<string, string>> = {
     analyzePlantSubtitle: "ஒரு தாவர இலைப் படத்தை பதிவேற்றவும், AI மாதிரி அதை பகுப்பாய்வு செய்யட்டும்.",
     selectFilePrompt: "தாவர இலைக் காட்டும் தெளிவான படத்தைத் தேர்ந்தெடுக்கவும். தெளிவான படங்கள் சிறந்த முடிவை வழங்கலாம்.",
     supportedFormats: "ஆதரிக்கப்படும் பட வடிவங்கள்: JPG, JPEG, PNG, WEBP",
+    invalidImageType: "JPG, JPEG, PNG அல்லது WEBP படத்தைத் தேர்ந்தெடுக்கவும்.",
+    unreadableImage: "இந்தக் கோப்பைப் படமாகத் திறக்க முடியவில்லை. வேறு படத்தைத் தேர்ந்தெடுக்கவும்.",
+    imageTooSmall: "படம் மிகவும் சிறியது. குறைந்தது 32 × 32 பிக்சல்கள் உள்ள படத்தைத் தேர்ந்தெடுக்கவும்.",
+    imageTooLarge: "படம் மிகவும் பெரியது. 40 மில்லியன் பிக்சல்களுக்கு மிகாத படத்தைத் தேர்ந்தெடுக்கவும்.",
     selectedImage: "தேர்ந்தெடுக்கப்பட்ட படம்",
     plantImagePreview: "உங்கள் தாவரப் படம்",
     ready: "தயார்",
@@ -366,7 +474,7 @@ const translations: Record<Language, Record<string, string>> = {
     featureTreatmentCalculatorText: "பாதிக்கப்பட்ட பகுதி மற்றும் விவசாய பயன்பாட்டு வீதத்தின் அடிப்படையில் சிகிச்சை அளவை மதிப்பிடுகிறது.",
     readyCheckPlant: "உங்கள் தாவரத்தைச் சரிபார்க்க வேண்டுமா?",
     ctaDescription: "ஒரு தாவர இலைப் படத்தை பதிவேற்றி, Plant Guard AI என்ன கண்டறிய முடியும் என்பதை ஆராயுங்கள்.",
-    footerSummary: "AI-இயக்கப்பட்ட தாவர நோய் கண்டறிதல் மற்றும் தாவர பராமரிப்பு உதவி.",
+    footerSummary: "AI உதவியுடன் தாவர நோய் அறிகுறிகளைப் பரிசோதித்து, தாவரப் பராமரிப்பு தகவலை வழங்குகிறது.",
     quickNav: "விரைவு வழிசெலுத்தல்",
     homeLink: "முகப்பு",
     diseaseDetectionLink: "நோய் கண்டறிதல்",
@@ -374,7 +482,9 @@ const translations: Record<Language, Record<string, string>> = {
     aboutLink: "பற்றி",
     projectLink: "திட்டம்",
     miniProject: "சிறிய திட்டம்",
-    footerCopyright: "© 2026 Plant Guard AI. கல்வி சிறிய திட்டமாக உருவாக்கப்பட்டது.",
+    footerCopyright: "© Plant Guard AI",
+    footerAdvisory: "AI கணிப்புகள் ஆலோசனைக்கானவை; அவை தவறாக இருக்கலாம், உறுதிப்படுத்தப்பட்ட நோய் கண்டறிதல் அல்ல.",
+    footerTreatmentSafety: "சரிபார்க்கப்பட்ட தயாரிப்பு லேபிள் வழிமுறைகளைப் பின்பற்றவும்; சிகிச்சை முடிவுகளுக்கு தகுதியான வேளாண் நிபுணரிடம் ஆலோசனை பெறவும்.",
     techFooterText: "AI தாவர ஆரோக்கிய உதவியாளர்",
     statusLabel: "கண்டறிதல் அமைப்பு",
   },
@@ -427,8 +537,15 @@ export default function Home() {
   const [error, setError] = useState("");
 
   const [calculatorQuantity, setCalculatorQuantity] = useState("");
+  const [calculatorMode, setCalculatorMode] = useState<"acres" | "cents" | "plants">("acres");
   const [calculatorTouched, setCalculatorTouched] = useState(false);
   const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
+  const [calculatorCrops, setCalculatorCrops] = useState<CropOption[]>([]);
+  const [calculatorDiseases, setCalculatorDiseases] = useState<DiseaseOption[]>([]);
+  const [calculatorCrop, setCalculatorCrop] = useState("");
+  const [calculatorDiseaseId, setCalculatorDiseaseId] = useState<number | null>(null);
+  const [calculatorDiseaseDetails, setCalculatorDiseaseDetails] = useState<CalculatorDiseaseDetails | null>(null);
+  const [calculatorDiseaseLoadError, setCalculatorDiseaseLoadError] = useState(false);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -457,10 +574,42 @@ export default function Home() {
     },
   ]);
   const resultSectionRef = useRef<HTMLElement | null>(null);
-  const previousResultKeyRef = useRef<string>("");
+  const previewSectionRef = useRef<HTMLDivElement | null>(null);
+  const errorMessageRef = useRef<HTMLDivElement | null>(null);
+  const pendingPreviewScrollRef = useRef(false);
+  const scrollRequestIdRef = useRef(0);
+  const [scrollRequest, setScrollRequest] = useState<{
+    target: "result" | "error";
+    id: number;
+  } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
   const t = translations[language];
+
+  const scrollIntoView = useCallback((element: HTMLElement | null) => {
+    if (!element) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }, []);
+
+  const requestScroll = (target: "result" | "error") => {
+    scrollRequestIdRef.current += 1;
+    setScrollRequest({ target, id: scrollRequestIdRef.current });
+  };
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -512,35 +661,75 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch(`${API_BASE_URL}/api/crops`).then((response) => response.json()),
+      fetch(`${API_BASE_URL}/api/diseases`).then((response) => response.json()),
+    ]).then(([cropData, diseaseData]) => {
+      if (!active) return;
+      setCalculatorCrops(Array.isArray(cropData.crops) ? cropData.crops : []);
+      setCalculatorDiseases(Array.isArray(diseaseData.diseases) ? diseaseData.diseases : []);
+    }).catch(() => {
+      // The prediction context remains available if database lists cannot load.
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!result || calculatorDiseaseId === null || calculatorDiseaseId === result.disease.id) {
+      return;
+    }
+
+    let active = true;
+    fetch(`${API_BASE_URL}/api/diseases/${calculatorDiseaseId}`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.treatments) || data.crop_name !== calculatorCrop) {
+          throw new Error("Disease details unavailable");
+        }
+        return data as CalculatorDiseaseDetails;
+      })
+      .then((data) => {
+        if (active) {
+          setCalculatorDiseaseDetails(data);
+          setCalculatorDiseaseLoadError(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCalculatorDiseaseDetails(null);
+          setCalculatorDiseaseLoadError(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [calculatorCrop, calculatorDiseaseId, result]);
+
+  useEffect(() => {
     sessionStorage.setItem("plant-guard-language", language);
   }, [language]);
 
   useEffect(() => {
-    if (!result || !resultSectionRef.current) {
+    if (!scrollRequest) {
       return;
     }
 
-    const currentResultKey = `${result.disease?.id ?? "unknown"}-${result.confidence ?? "0"}-${result.disease?.name ?? ""}`;
-
-    if (currentResultKey === previousResultKeyRef.current) {
-      return;
-    }
-
-    previousResultKeyRef.current = currentResultKey;
-
-    const scrollTarget = () => {
-      if (!resultSectionRef.current) {
-        return;
+    const frame = requestAnimationFrame(() => {
+      if (scrollRequest.target === "error") {
+        errorMessageRef.current?.focus({ preventScroll: true });
+        scrollIntoView(errorMessageRef.current);
+      } else {
+        scrollIntoView(resultSectionRef.current);
       }
+    });
 
-      resultSectionRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    };
-
-    requestAnimationFrame(scrollTarget);
-  }, [result]);
+    return () => cancelAnimationFrame(frame);
+  }, [scrollIntoView, scrollRequest]);
 
   useEffect(() => {
     if (chatMessagesRef.current) {
@@ -614,9 +803,7 @@ export default function Home() {
   };
 
   const scrollToSection = (sectionId: string) => {
-    document.getElementById(sectionId)?.scrollIntoView({
-      behavior: "smooth",
-    });
+    scrollIntoView(document.getElementById(sectionId));
   };
 
   const handleFileChange = (
@@ -628,14 +815,26 @@ export default function Home() {
       return;
     }
 
+    const allowedExtensions = /\.(jpe?g|png|webp)$/i;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedExtensions.test(file.name) || (file.type && !allowedTypes.includes(file.type))) {
+      pendingPreviewScrollRef.current = false;
+      setSelectedFile(null);
+      setPreview(null);
+      setResult(null);
+      setError(t.invalidImageType);
+      setScrollRequest(null);
+      event.currentTarget.value = "";
+      return;
+    }
+
+    pendingPreviewScrollRef.current = true;
     setSelectedFile(file);
     setPreview(URL.createObjectURL(file));
+    event.currentTarget.value = "";
     setResult(null);
     setError("");
-
-    setTimeout(() => {
-      scrollToSection("analyzer");
-    }, 100);
+    setScrollRequest(null);
   };
 
   const analyzePlant = async () => {
@@ -646,6 +845,7 @@ export default function Home() {
     setLoading(true);
     setResult(null);
     setError("");
+    setScrollRequest(null);
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -669,6 +869,11 @@ export default function Home() {
       }
 
       setResult(data);
+      requestScroll("result");
+      setCalculatorCrop(data.disease.crop_name || "");
+      setCalculatorDiseaseId(data.disease.id);
+      setCalculatorDiseaseDetails(null);
+      setCalculatorDiseaseLoadError(false);
       setSelectedRateId(null);
       setCalculatorQuantity("");
       if (data.history_saved) {
@@ -682,6 +887,7 @@ export default function Home() {
           ? err.message
           : "Unable to connect to Plant Guard AI backend. Make sure FastAPI is running."
       );
+      requestScroll("error");
     } finally {
       setLoading(false);
     }
@@ -692,26 +898,79 @@ export default function Home() {
     setPreview(null);
     setResult(null);
     setError("");
+    pendingPreviewScrollRef.current = false;
+    setScrollRequest(null);
     setCalculatorQuantity("");
     setCalculatorTouched(false);
     setSelectedRateId(null);
   };
 
-  const displayedOptions = useMemo(
-    () => getCalculableAreaRates(result?.treatments, result?.disease.id ?? null),
-    [result]
+  const calculatorUsesPrediction = result?.disease.id !== null
+    && result?.disease.id === calculatorDiseaseId;
+  const calculatorPredictionCrop = result?.disease.id
+    ? calculatorDiseases.find((disease) => disease.id === result.disease.id)?.crop_name
+      ?? result.disease.crop_name
+    : result?.disease.crop_name ?? "";
+  const activeCalculatorCrop = calculatorUsesPrediction ? calculatorPredictionCrop : calculatorCrop;
+  const calculatorContext = useMemo<CalculatorDiseaseDetails | null>(() => (
+    calculatorUsesPrediction && result
+      ? {
+          id: result.disease.id as number,
+          name: result.disease.name,
+          crop_name: result.disease.crop_name,
+          treatments: result.treatments,
+        }
+      : calculatorDiseaseDetails?.id === calculatorDiseaseId
+        && calculatorDiseaseDetails.crop_name === activeCalculatorCrop
+        ? calculatorDiseaseDetails
+        : null
+  ), [activeCalculatorCrop, calculatorDiseaseDetails, calculatorDiseaseId, calculatorUsesPrediction, result]);
+  const calculatorContextLoading = Boolean(
+    result
+    && calculatorDiseaseId !== null
+    && !calculatorUsesPrediction
+    && !calculatorDiseaseLoadError
+    && calculatorDiseaseDetails?.id !== calculatorDiseaseId
+  );
+  const calculatorCropOptions = Array.from(new Set([
+    ...calculatorCrops.map((crop) => crop.name),
+    ...(calculatorPredictionCrop ? [calculatorPredictionCrop] : []),
+  ]));
+  const calculatorDiseaseOptions = calculatorDiseases.filter((disease) => disease.crop_name === activeCalculatorCrop);
+  if (result?.disease.id && calculatorPredictionCrop === activeCalculatorCrop
+    && !calculatorDiseaseOptions.some((disease) => disease.id === result.disease.id)) {
+    calculatorDiseaseOptions.unshift({
+      id: result.disease.id,
+      name: result.disease.name,
+      crop_name: result.disease.crop_name,
+    });
+  }
+
+  const displayedRates = useMemo(
+    () => calculatorUsesPrediction && (result?.is_healthy || result?.is_uncertain)
+      ? []
+      : getCalculableRates(calculatorContext?.treatments, calculatorContext?.id ?? null),
+    [calculatorContext, calculatorUsesPrediction, result]
+  );
+  const modeRates = useMemo(
+    () => getRatesForMode(displayedRates, calculatorMode),
+    [displayedRates, calculatorMode]
   );
 
   const selectedRate = useMemo(
     () =>
-      displayedOptions.find((option) => option.rateId === selectedRateId) ??
-      displayedOptions[0] ??
+      modeRates.find((option) => option.rateId === selectedRateId) ??
+      modeRates[0] ??
       null,
-    [displayedOptions, selectedRateId]
+    [modeRates, selectedRateId]
   );
 
-  const areaValidation = validateAreaInput(calculatorQuantity);
-  const treatmentCalculation = calculateTreatmentQuantity(calculatorQuantity, selectedRate);
+  const quantityValidation = validateQuantityInput(calculatorQuantity, calculatorMode);
+  const areaSquareFeet = getAreaSquareFeet(calculatorQuantity, calculatorMode);
+  const treatmentCalculation = calculateTreatmentQuantity(calculatorQuantity, calculatorMode, selectedRate);
+  const selectedTreatment = calculatorContext?.treatments.find(
+    (treatment) => treatment.id === selectedRate?.treatmentId
+  );
 
   const hasValidCalculation =
     treatmentCalculation.error === null &&
@@ -840,19 +1099,18 @@ export default function Home() {
       }
     : null;
 
-  const diseaseInfo: DatabaseDiseaseInfo | null = result
+  const displayableDiseaseGuidance = result ? getDisplayableDiseaseGuidance(result) : null;
+  const diseaseInfo: DatabaseDiseaseInfo | null = displayableDiseaseGuidance
     ? {
-        about: result.disease.description,
-        symptoms: result.symptoms,
-        causes: result.causes,
-        treatment: result.treatments,
-        prevention: result.prevention,
+        about: displayableDiseaseGuidance.about,
+        symptoms: displayableDiseaseGuidance.symptoms,
+        causes: displayableDiseaseGuidance.causes,
+        treatment: displayableDiseaseGuidance.treatments,
+        prevention: displayableDiseaseGuidance.prevention,
       }
     : null;
 
-  const noVerifiedGuidance = language === "ta"
-    ? "இந்த மாதிரி வகைக்கு சரிபார்க்கப்பட்ட தகவல் அறிவுத் தரவுத்தளத்தில் இல்லை."
-    : "No verified guidance for this model class is available in the knowledge base.";
+  const noVerifiedGuidance = getGuidanceUnavailableMessage(language);
   const diagnosisDisclaimer = language === "ta"
     ? "இது ஒரு AI மாதிரி கணிப்பு மட்டுமே; உறுதிப்படுத்தப்பட்ட நோய் கண்டறிதல் அல்ல."
     : "This is an AI model prediction, not a confirmed diagnosis.";
@@ -1039,7 +1297,7 @@ export default function Home() {
 
       <section
         id="home"
-        className="relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-emerald-50 px-5 py-20 lg:py-28"
+        className="scroll-mt-24 relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-emerald-50 px-5 py-20 lg:py-28"
       >
 
         <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-green-100 opacity-60 blur-3xl" />
@@ -1232,7 +1490,7 @@ export default function Home() {
       {/* ANALYZER */}
       <section
         id="analyzer"
-        className="px-5 py-20 lg:py-24"
+        className="scroll-mt-24 px-5 py-20 lg:py-24"
       >
         <div className="mx-auto max-w-6xl">
 
@@ -1298,7 +1556,7 @@ export default function Home() {
 
             {/* PREVIEW */}
             {preview && (
-              <div className="mt-10">
+              <div ref={previewSectionRef} className="mt-10 scroll-mt-24">
 
                 <div className="mb-5 flex items-center justify-between">
                   <div>
@@ -1321,6 +1579,33 @@ export default function Home() {
                     src={preview}
                     alt={language === "ta" ? "தேர்ந்தெடுக்கப்பட்ட தாவர இலை" : "Selected plant leaf"}
                     className="mx-auto max-h-[500px] w-full object-contain"
+                    onLoad={(event) => {
+                      const image = event.currentTarget;
+                      if (image.naturalWidth < 32 || image.naturalHeight < 32) {
+                        pendingPreviewScrollRef.current = false;
+                        setSelectedFile(null);
+                        setPreview(null);
+                        setError(t.imageTooSmall);
+                        return;
+                      }
+                      if (image.naturalWidth * image.naturalHeight > 40_000_000) {
+                        pendingPreviewScrollRef.current = false;
+                        setSelectedFile(null);
+                        setPreview(null);
+                        setError(t.imageTooLarge);
+                        return;
+                      }
+                      if (pendingPreviewScrollRef.current) {
+                        pendingPreviewScrollRef.current = false;
+                        scrollIntoView(previewSectionRef.current);
+                      }
+                    }}
+                    onError={() => {
+                      pendingPreviewScrollRef.current = false;
+                      setSelectedFile(null);
+                      setPreview(null);
+                      setError(t.unreadableImage);
+                    }}
                   />
                 </div>
 
@@ -1351,7 +1636,12 @@ export default function Home() {
 
             {/* ERROR */}
             {error && (
-              <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5">
+              <div
+                ref={errorMessageRef}
+                tabIndex={-1}
+                role="alert"
+                className="mt-8 scroll-mt-24 rounded-2xl border border-red-200 bg-red-50 p-5 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
                 <div className="flex gap-3">
                   <span className="text-xl">⚠️</span>
 
@@ -1377,7 +1667,7 @@ export default function Home() {
         <section
           id="result"
           ref={resultSectionRef}
-          className="scroll-mt-20 bg-slate-100 px-5 py-20"
+          className="scroll-mt-24 bg-slate-100 px-5 py-20"
         >
           <div className="mx-auto max-w-6xl">
 
@@ -1409,11 +1699,13 @@ export default function Home() {
                 </p>
 
                 <h2 className="mt-2 text-4xl font-black md:text-5xl">
-                  {diseaseData.disease}
+                  {result.is_uncertain
+                    ? t.uncertainResult
+                    : result.is_healthy ? t.healthyResult : diseaseData.disease}
                 </h2>
 
                 <p className="mt-4 text-lg text-green-50">
-                  {t.candidateCrop}{" "}
+                  {result.is_healthy && !result.is_uncertain ? t.possibleHealthyCrop : t.candidateCrop}{" "}
                   <span className="font-bold">
                     {diseaseData.plant}
                   </span>
@@ -1451,10 +1743,20 @@ export default function Home() {
                   </div>
 
                   <p className="mt-3 text-sm text-slate-600">
-                    {result.uncertainty_warning || (language === "ta"
+                    {result.is_uncertain ? t.uncertainResultNote : result.uncertainty_warning || (language === "ta"
                       ? "இந்த மதிப்பெண் அளவுத்திருத்தம் செய்யப்பட்ட நிகழ்தகவு அல்ல. முடிவை அறிகுறிகளுடன் ஒப்பிட்டு சரிபார்க்கவும்."
                       : "This score is not a calibrated probability. Check the result against visible symptoms.")}
                   </p>
+                  {result.is_uncertain && (
+                    <p className="mt-2 text-sm font-medium text-slate-700">
+                      {t.modelCandidateLabel} {diseaseData.disease}
+                    </p>
+                  )}
+                  {result.is_healthy && !result.is_uncertain && (
+                    <p className="mt-2 text-sm font-medium text-amber-800">
+                      {t.healthyResultNote}
+                    </p>
+                  )}
                   {result.history_warning && (
                     <p className="mt-2 text-sm text-amber-700">{result.history_warning}</p>
                   )}
@@ -1690,15 +1992,32 @@ export default function Home() {
 
               <div className="mx-auto mt-8 max-w-4xl">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <label htmlFor="quantity-mode" className="mb-2 block text-sm font-bold text-slate-700">
+                    {t.quantityMode}
+                  </label>
+                  <select
+                    id="quantity-mode"
+                    value={calculatorMode}
+                    onChange={(event) => {
+                      setCalculatorMode(event.target.value as "acres" | "cents" | "plants");
+                      setSelectedRateId(null);
+                    }}
+                    className="mb-5 w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  >
+                    <option value="acres">{t.acres}</option>
+                    <option value="cents">{t.cents}</option>
+                    <option value="plants">{t.numberOfPlants}</option>
+                  </select>
+
                   <label htmlFor="affected-area" className="mb-3 block text-sm font-bold text-slate-700">
-                    {t.affectedArea}
+                    {t.affectedArea} ({calculatorMode === "acres" ? t.acres : calculatorMode === "cents" ? t.cents : t.numberOfPlants})
                   </label>
 
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <input
                       id="affected-area"
                       type="text"
-                      inputMode="decimal"
+                      inputMode={calculatorMode === "plants" ? "numeric" : "decimal"}
                       autoComplete="off"
                       value={calculatorQuantity}
                       onChange={(event) => {
@@ -1706,45 +2025,125 @@ export default function Home() {
                         setCalculatorTouched(true);
                       }}
                       onBlur={() => setCalculatorTouched(true)}
-                      placeholder="Example: 0.16"
-                      aria-invalid={calculatorTouched && !areaValidation.valid}
+                      placeholder={t.quantityPlaceholder}
+                      aria-invalid={calculatorTouched && !quantityValidation.valid}
                       aria-describedby="affected-area-help affected-area-error"
                       className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                     />
 
                     <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-700">
-                      {t.acres}
+                      {calculatorMode === "acres" ? t.acres : calculatorMode === "cents" ? t.cents : t.numberOfPlants}
                     </div>
                   </div>
 
-                  <p id="affected-area-help" className="mt-2 text-xs text-slate-500">{t.areaHelp}</p>
-                  {calculatorTouched && !areaValidation.valid && (
+                  <p id="affected-area-help" className="mt-2 text-xs text-slate-500">{t.quantityHelp}</p>
+                  {areaSquareFeet !== null && (
+                    <p className="mt-2 text-sm font-semibold text-slate-700">
+                      {t.convertedArea}: {formatCalculatedQuantity(areaSquareFeet)} sq ft
+                    </p>
+                  )}
+                  {calculatorTouched && !quantityValidation.valid && (
                     <p id="affected-area-error" role="alert" className="mt-2 text-sm font-semibold text-red-700">
-                      {areaValidation.error === "empty"
-                        ? t.areaEmpty
-                        : areaValidation.error === "non_positive"
-                          ? t.areaPositive
-                          : t.areaInvalid}
+                      {quantityValidation.error === "empty"
+                        ? t.quantityEmpty
+                        : quantityValidation.error === "non_positive"
+                          ? t.quantityPositive
+                          : calculatorMode === "plants"
+                            ? t.wholePlantCount
+                            : t.areaInvalid}
                     </p>
                   )}
                 </div>
               </div>
 
-              {displayedOptions.length === 0 ? (
+              <div className="mx-auto mt-6 max-w-4xl rounded-2xl border border-green-100 bg-white/80 p-5 text-sm text-slate-700">
+                <p className="font-bold">{t.selectedContext}</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="block font-semibold">
+                    {t.selectCrop}
+                    <select
+                      value={activeCalculatorCrop}
+                      onChange={(event) => {
+                        const nextCrop = event.target.value;
+                        const nextDisease = calculatorDiseases.find((disease) => disease.crop_name === nextCrop);
+                        setCalculatorCrop(nextCrop);
+                        setCalculatorDiseaseId(nextDisease?.id ?? (nextCrop === calculatorPredictionCrop ? result.disease.id : null));
+                        setCalculatorDiseaseDetails(null);
+                        setCalculatorDiseaseLoadError(false);
+                        setSelectedRateId(null);
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 font-normal outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    >
+                      {calculatorCropOptions.map((crop) => (
+                        <option key={crop} value={crop}>{crop}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block font-semibold">
+                    {t.selectDisease}
+                    <select
+                      value={calculatorDiseaseId ?? ""}
+                      onChange={(event) => {
+                        const nextDiseaseId = Number(event.target.value);
+                        setCalculatorDiseaseId(Number.isInteger(nextDiseaseId) && nextDiseaseId > 0 ? nextDiseaseId : null);
+                        setCalculatorDiseaseDetails(null);
+                        setCalculatorDiseaseLoadError(false);
+                        setSelectedRateId(null);
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 font-normal outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    >
+                      <option value="">{calculatorDiseaseOptions.length === 0 ? t.noDiseasesForCrop : t.chooseDisease}</option>
+                      {calculatorDiseaseOptions.map((disease) => (
+                        <option key={disease.id} value={disease.id}>
+                          {getLocalizedDisplayName(disease.name, language)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div><dt className="inline font-semibold">{t.cropLabel}: </dt><dd className="inline">{calculatorContext ? getLocalizedDisplayName(calculatorContext.crop_name, language) : activeCalculatorCrop || "—"}</dd></div>
+                  <div><dt className="inline font-semibold">{t.diseaseLabel}: </dt><dd className="inline">{calculatorContext ? getLocalizedDisplayName(calculatorContext.name, language) : "—"}</dd></div>
+                  {selectedRate?.treatmentName && (
+                    <div className="sm:col-span-2"><dt className="inline font-semibold">{t.treatment}: </dt><dd className="inline">{getLocalizedDisplayName(selectedRate.treatmentName, language)}</dd></div>
+                  )}
+                </dl>
+                {!calculatorContext && calculatorDiseaseId && (
+                  <p role="status" className="mt-2 text-xs text-slate-500">{t.loadingDisease}</p>
+                )}
+                <p className="mt-3 text-xs leading-5 text-amber-800">
+                  {calculatorUsesPrediction ? t.candidateCalculation : t.manualCalculation}
+                </p>
+              </div>
+
+              {calculatorDiseaseLoadError ? (
+                <div role="alert" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+                  {t.diseaseLoadFailed}
+                </div>
+              ) : calculatorContextLoading ? (
+                <div role="status" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-600">
+                  {t.loadingDisease}
+                </div>
+              ) : displayedRates.length === 0 ? (
                 <div className="mx-auto mt-6 max-w-4xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-sm text-amber-950">
                   <p className="font-bold">{language === "ta" ? "கணக்கீடு கிடைக்கவில்லை" : "Calculation unavailable"}</p>
                   <p className="mt-1">{t.rateUnavailable}</p>
+                </div>
+              ) : modeRates.length === 0 ? (
+                <div className="mx-auto mt-6 max-w-4xl rounded-2xl border border-amber-200 bg-white/80 p-5 text-sm text-amber-950">
+                  <p className="font-bold">{language === "ta" ? "இந்த அளவு முறைக்கு வீதம் இல்லை" : "No compatible rate for this mode"}</p>
+                  <p className="mt-1">{t.modeRateUnavailable}</p>
                 </div>
               ) : (
                 <>
 
                   <div className="mx-auto mt-8 max-w-4xl">
                     <p className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">
-                      {t.treatment} / {t.aiModel}
+                      {t.treatment} / {t.rate}
                     </p>
 
                     <div className="grid gap-3 md:grid-cols-2">
-                      {displayedOptions.map((option) => (
+                      {modeRates.map((option) => (
                         <button
                           key={option.rateId}
                           type="button"
@@ -1803,19 +2202,38 @@ export default function Home() {
                           </p>
                           <p className="mt-1 text-base font-black text-slate-900">
                             {language === "ta"
-                              ? selectedRate.basis?.toLowerCase().includes("acre")
+                              ? (selectedRate.displayBasis || selectedRate.basis)?.toLowerCase().includes("acre")
                                 ? "ஒரு ஏக்கருக்கு"
-                                : selectedRate.basis || "ஒரு அலகுக்கு"
-                              : selectedRate.basis || "per unit"}
+                                : selectedRate.displayBasis || selectedRate.basis || "ஒரு அலகுக்கு"
+                              : selectedRate.displayBasis || selectedRate.basis || "per unit"}
                           </p>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="font-bold text-slate-700">{t.affectedArea}</p>
+                          <p className="font-bold text-slate-700">{t.enteredQuantity}</p>
                           <p className="mt-1 text-base font-black text-slate-900">
-                            {calculatorQuantity || "0"} {language === "ta" ? "ஏக்கர்" : "acre"}
+                            {calculatorQuantity || "0"} {calculatorMode === "acres" ? t.acres : calculatorMode === "cents" ? t.cents : t.numberOfPlants}
                           </p>
                         </div>
+
+                        {hasValidCalculation && (
+                          <>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <p className="font-bold text-slate-700">{t.convertedQuantity}</p>
+                              <p className="mt-1 text-base font-black text-slate-900">
+                                {formatCalculatedQuantity(treatmentCalculation.basisQuantity)} {treatmentCalculation.basisUnit}
+                              </p>
+                            </div>
+                            {treatmentCalculation.squareFeet !== null && (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="font-bold text-slate-700">{t.squareFeet}</p>
+                                <p className="mt-1 text-base font-black text-slate-900">
+                                  {formatCalculatedQuantity(treatmentCalculation.squareFeet)} sq ft
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
 
                         {selectedRate.treatmentName && (
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1843,6 +2261,19 @@ export default function Home() {
                         </a>
                       </p>
 
+                      {selectedTreatment?.instructions && (
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          <strong>{language === "ta" ? "வழிமுறைகள்:" : "Instructions:"}</strong>{" "}
+                          {selectedTreatment.instructions}
+                        </p>
+                      )}
+                      {selectedTreatment?.precautions && (
+                        <p className="mt-2 text-sm leading-6 text-amber-800">
+                          <strong>{language === "ta" ? "ஜாக்கிரதைகள்:" : "Precautions:"}</strong>{" "}
+                          {selectedTreatment.precautions}
+                        </p>
+                      )}
+
                       {hasValidCalculation ? (
                         <>
                           <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
@@ -1851,7 +2282,7 @@ export default function Home() {
                             </p>
 
                             <p className="mt-2 text-4xl font-black text-green-700">
-                              {treatmentCalculation.total.toFixed(2)}
+                              {formatCalculatedQuantity(treatmentCalculation.total)}
                             </p>
 
                             <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -1861,7 +2292,7 @@ export default function Home() {
 
                           <div className="mt-4 text-sm leading-6 text-slate-600">
                             <strong>{language === "ta" ? "கணக்கீடு:" : "Calculation:"}</strong>{" "}
-                            {treatmentCalculation.area} acres × {selectedRate.rate} {selectedRate.measurementUnit} = {treatmentCalculation.total.toFixed(2)} {treatmentCalculation.unit}
+                            {formatCalculatedQuantity(treatmentCalculation.basisQuantity)} {treatmentCalculation.basisUnit} × {selectedRate.rate} {selectedRate.measurementUnit} = {formatCalculatedQuantity(treatmentCalculation.total)} {treatmentCalculation.unit}
                           </div>
                         </>
                       ) : null}
@@ -1915,7 +2346,7 @@ export default function Home() {
       )}
 
       {/* SAVED PREDICTIONS */}
-      <section id="history" className="bg-slate-50 px-5 py-20">
+      <section id="history" className="scroll-mt-24 bg-slate-50 px-5 py-20">
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1952,20 +2383,35 @@ export default function Home() {
             <ul className="mt-6 grid gap-4 md:grid-cols-2">
               {history.map((item) => (
                 <li key={item.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900">{item.disease_name}</h3>
-                      <p className="mt-1 text-sm text-slate-600">{item.crop_name}</p>
+                  <div className="flex items-start gap-4">
+                    {item.image_url && (
+                      <img
+                        src={`${API_BASE_URL}/${item.image_url.replace(/^\/+/, "")}`}
+                        alt={`Saved plant image for ${item.disease_name} prediction`}
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                        className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">{item.disease_name}</h3>
+                          <p className="mt-1 text-sm text-slate-600">{item.crop_name}</p>
+                        </div>
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">
+                          {t.modelConfidence}: {item.confidence === null ? "—" : `${item.confidence.toFixed(2)}%`}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-xs text-slate-500">
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleString(language === "ta" ? "ta-IN" : "en-US")
+                          : "—"}
+                      </p>
                     </div>
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">
-                      {t.modelConfidence}: {item.confidence === null ? "—" : `${item.confidence.toFixed(2)}%`}
-                    </span>
                   </div>
-                  <p className="mt-4 text-xs text-slate-500">
-                    {item.created_at
-                      ? new Date(item.created_at).toLocaleString(language === "ta" ? "ta-IN" : "en-US")
-                      : "—"}
-                  </p>
                 </li>
               ))}
             </ul>
@@ -1976,7 +2422,7 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section
         id="how-it-works"
-        className="bg-white px-5 py-24"
+        className="scroll-mt-24 bg-white px-5 py-24"
       >
         <div className="mx-auto max-w-6xl">
 
@@ -2125,7 +2571,7 @@ export default function Home() {
       {/* ABOUT */}
 <section
   id="about"
-  className="scroll-mt-20 bg-white px-5 py-24"
+  className="scroll-mt-24 bg-white px-5 py-24"
 >
   <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
 
@@ -2248,7 +2694,7 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-slate-950 px-5 py-12 text-white">
+      <footer className="border-t border-slate-800 bg-slate-950 px-5 py-10 text-white md:py-12">
 
         <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-3">
 
@@ -2279,46 +2725,47 @@ export default function Home() {
               {t.quickNav}
             </h3>
 
-            <div className="mt-4 space-y-3 text-sm text-slate-400">
-
-              <button
-                onClick={() => scrollToSection("home")}
-                className="block transition hover:text-white"
+            <nav aria-label={t.quickNav} className="mt-4 flex flex-col items-start gap-3 text-sm">
+              <a
+                href="#home"
+                onClick={(event) => { event.preventDefault(); scrollToSection("home"); }}
+                className="text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 {t.homeLink}
-              </button>
+              </a>
 
-              <button
-                onClick={() => scrollToSection("analyzer")}
-                className="block transition hover:text-white"
+              <a
+                href="#analyzer"
+                onClick={(event) => { event.preventDefault(); scrollToSection("analyzer"); }}
+                className="text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 {t.diseaseDetectionLink}
-              </button>
+              </a>
 
-              <button
-                onClick={() => scrollToSection("history")}
-                className="block transition hover:text-white"
+              <a
+                href="#history"
+                onClick={(event) => { event.preventDefault(); scrollToSection("history"); }}
+                className="text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 {t.navHistory}
-              </button>
+              </a>
 
-              <button
-                onClick={() =>
-                  scrollToSection("how-it-works")
-                }
-                className="block transition hover:text-white"
+              <a
+                href="#how-it-works"
+                onClick={(event) => { event.preventDefault(); scrollToSection("how-it-works"); }}
+                className="text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 {t.howItWorksLink}
-              </button>
+              </a>
 
-              <button
-                onClick={() => scrollToSection("about")}
-                className="block transition hover:text-white"
+              <a
+                href="#about"
+                onClick={(event) => { event.preventDefault(); scrollToSection("about"); }}
+                className="text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 {t.aboutLink}
-              </button>
-
-            </div>
+              </a>
+            </nav>
           </div>
 
           <div>
@@ -2337,7 +2784,12 @@ export default function Home() {
 
         </div>
 
-        <div className="mx-auto mt-10 max-w-6xl border-t border-slate-800 pt-6 text-center text-xs text-slate-500">
+        <div className="mx-auto mt-8 grid max-w-6xl gap-4 border-t border-slate-800 pt-6 text-sm text-slate-400 md:grid-cols-2">
+          <p>{t.footerAdvisory}</p>
+          <p>{t.footerTreatmentSafety}</p>
+        </div>
+
+        <div className="mx-auto mt-6 max-w-6xl border-t border-slate-800 pt-5 text-center text-xs text-slate-500">
           {t.footerCopyright}
         </div>
 
