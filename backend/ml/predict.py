@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import onnxruntime as ort
 
 # Base directory resolution
@@ -95,7 +95,8 @@ def get_class_names() -> List[str]:
 
 def preprocess_image(image: Image.Image) -> np.ndarray:
     """Apply the upstream model-card preprocessing and return a float32 NCHW batch."""
-    rgb = image.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+    oriented = ImageOps.exif_transpose(image)
+    rgb = oriented.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
     arr = np.asarray(rgb, dtype=np.float32) / 255.0
     arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
     return np.expand_dims(np.transpose(arr, (2, 0, 1)), axis=0).astype(np.float32)
@@ -179,6 +180,11 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
     predicted_class = classes[top_index]
 
     crop_name, condition_name, is_healthy = parse_class_label(predicted_class)
+    parsed_classes = [parse_class_label(label) for label in classes]
+    crop_classes = [label for label in parsed_classes if label[0] == crop_name]
+    crop_has_healthy_class = any(label[2] for label in crop_classes)
+    crop_has_disease_class = any(not label[2] for label in crop_classes)
+    is_uncertain = not (crop_has_healthy_class and crop_has_disease_class)
 
     top_predictions = []
     for idx in sorted_indices[:top_k]:
@@ -190,18 +196,33 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
             "confidence": round(float(probs[idx]) * 100, 2),
         })
 
-    # A softmax score is not calibrated and cannot establish in-domain input.
+    # Softmax cannot establish that an image is in-domain. In addition, crops
+    # without both healthy and disease labels cannot support that distinction.
     status = "Uncalibrated model score"
-    uncertainty_warning = (
-        "This model score is not a calibrated probability, and unsupported images "
-        "may still receive a class prediction. Treat the result as a candidate and "
-        "verify it using plant symptoms or qualified agricultural guidance."
-    )
+    if is_uncertain and crop_has_healthy_class:
+        status = "Uncertain: disease classes are not supported for this crop"
+        coverage_warning = (
+            f"The model has no disease classes for {crop_name}; a healthy-class result "
+            "cannot rule out disease."
+        )
+    elif is_uncertain:
+        status = "Uncertain: healthy class is not supported for this crop"
+        coverage_warning = (
+            f"The model has no healthy class for {crop_name}; a disease-class result "
+            "cannot confirm disease."
+        )
+    else:
+        coverage_warning = ""
+    uncertainty_warning = " ".join(part for part in (
+        coverage_warning,
+        "This model score is not a calibrated probability, and unsupported images may still receive a class prediction. Treat the result as a candidate and verify it using visible symptoms or qualified agricultural guidance.",
+    ) if part)
     return {
         "disease": predicted_class,
         "crop": crop_name,
         "condition": condition_name,
         "is_healthy": is_healthy,
+        "is_uncertain": is_uncertain,
         "confidence": confidence_percentage,
         "status": status,
         "uncertainty_warning": uncertainty_warning,

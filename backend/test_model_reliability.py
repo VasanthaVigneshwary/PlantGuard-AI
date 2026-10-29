@@ -3,12 +3,13 @@
 import json
 from pathlib import Path
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 BACKEND_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
@@ -48,6 +49,78 @@ class ModelReliabilityTests(unittest.TestCase):
         np.testing.assert_allclose(tensor[0, 0], (1.0 - 0.485) / 0.229, rtol=1e-6)
         np.testing.assert_allclose(tensor[0, 1], (0.0 - 0.456) / 0.224, rtol=1e-6)
         np.testing.assert_allclose(tensor[0, 2], (0.0 - 0.406) / 0.225, rtol=1e-6)
+
+    def test_exif_orientation_is_applied_before_resize(self):
+        image = Image.new("RGB", (40, 20), (0, 0, 0))
+        for x in range(20, 40):
+            for y in range(20):
+                image.putpixel((x, y), (255, 0, 0))
+        exif = Image.Exif()
+        exif[274] = 6
+
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "orientation.jpg"
+            image.save(image_path, exif=exif)
+            with Image.open(image_path) as opened:
+                oriented = ImageOps.exif_transpose(opened)
+                expected = prediction.preprocess_image(oriented)
+                actual = prediction.preprocess_image(opened)
+                uncorrected_rgb = opened.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+                uncorrected_arr = np.asarray(uncorrected_rgb, dtype=np.float32) / 255.0
+                uncorrected_arr = (uncorrected_arr - prediction.IMAGENET_MEAN) / prediction.IMAGENET_STD
+                uncorrected = np.expand_dims(
+                    np.transpose(uncorrected_arr, (2, 0, 1)),
+                    axis=0,
+                )
+
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=0)
+        self.assertFalse(np.allclose(actual, uncorrected))
+
+    def test_class_parser_distinguishes_healthy_and_diseased_outputs(self):
+        self.assertEqual(prediction.parse_class_label("Tomato___healthy"), ("Tomato", "healthy", True))
+        self.assertEqual(
+            prediction.parse_class_label("Tomato___Early_blight"),
+            ("Tomato", "Early blight", False),
+        )
+
+    def test_output_index_maps_to_the_matching_healthy_or_disease_label(self):
+        model_classes = prediction.get_class_names()
+
+        class FakeSession:
+            def __init__(self, output_index):
+                self.output_index = output_index
+
+            def get_inputs(self):
+                return [SimpleNamespace(name="input")]
+
+            def run(self, _outputs, _inputs):
+                logits = np.zeros((1, 38), dtype=np.float32)
+                logits[0, self.output_index] = 8.0
+                return [logits]
+
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "leaf.png"
+            Image.new("RGB", (64, 64), (20, 180, 40)).save(image_path)
+            for index, expected_label, expected_health, expected_uncertain in (
+                (37, "Tomato___healthy", True, False),
+                (29, "Tomato___Early_blight", False, False),
+                (4, "Blueberry___healthy", True, True),
+                (15, "Orange___Haunglongbing_(Citrus_greening)", False, True),
+            ):
+                with patch.object(prediction, "get_inference_session", return_value=FakeSession(index)):
+                    result = prediction.predict_disease(image_path)
+                self.assertEqual(model_classes[index], expected_label)
+                self.assertEqual(result["disease"], expected_label)
+                self.assertEqual(result["is_healthy"], expected_health)
+                self.assertEqual(result["is_uncertain"], expected_uncertain)
+                if expected_uncertain:
+                    self.assertTrue(result["status"].startswith("Uncertain:"))
+
+    def test_identical_image_inference_is_repeatable(self):
+        image_path = BACKEND_DIR.parent / "test_images" / "sample_leaf.jpg"
+        first = prediction.predict_disease(image_path)
+        second = prediction.predict_disease(image_path)
+        self.assertEqual(first, second)
 
     def test_every_class_index_matches_upstream_json_and_indexed_text_list(self):
         model_dir = BACKEND_DIR / "ml" / "models"

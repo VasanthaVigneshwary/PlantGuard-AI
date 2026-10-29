@@ -1,9 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import logging
 import re
 import io
 import tempfile
+import uuid
 from pathlib import Path
 from PIL import Image
 from ml.predict import ImageQualityError, predict_disease
@@ -309,6 +312,24 @@ def get_history_endpoint(limit: int = 20):
     }
 
 
+@router.get("/history/images/{filename}")
+def get_history_image(filename: str):
+    """Serve an image saved with a prediction history record."""
+    if not re.fullmatch(r"[0-9a-f]{32}\.(jpg|png|webp)", filename):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    image_path = Path(__file__).resolve().parents[1] / "uploads" / filename
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    media_types = {
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    return FileResponse(image_path, media_type=media_types[image_path.suffix])
+
+
 # --------------------------------------------------
 # PLANT IMAGE UPLOAD + AI PREDICTION
 # --------------------------------------------------
@@ -375,7 +396,7 @@ async def upload_plant_image(
             file_path = Path(buffer.name)
             buffer.write(contents)
 
-        result = predict_disease(file_path)
+        result = await run_in_threadpool(predict_disease, file_path)
     except ImageQualityError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -432,8 +453,10 @@ async def upload_plant_image(
                     "id": row[6],
                     "application_method": row[7] if len(row) > 7 else None,
                     "measurement_unit": row[8] if len(row) > 8 else None,
+                    "measurement_unit_key": row[8] if len(row) > 8 else None,
                     "rate": float(row[9]) if len(row) > 9 and row[9] is not None else None,
                     "basis": row[10] if len(row) > 10 else None,
+                    "basis_key": row[10] if len(row) > 10 else None,
                     "notes": row[11] if len(row) > 11 else None,
                     "verified": True,
                     "product_formulation": verified_metadata["product_formulation"],
@@ -464,6 +487,19 @@ async def upload_plant_image(
         causes_list = []
         prevention_list = []
 
+    # Save a permanent copy for the prediction history image endpoint.
+    extension_map = {"JPEG": ".jpg", "JPG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
+    saved_image_url = None
+    saved_extension = extension_map.get(img_format)
+    if saved_extension:
+        saved_filename = f"{uuid.uuid4().hex}{saved_extension}"
+        saved_image_path = upload_folder / saved_filename
+        try:
+            saved_image_path.write_bytes(contents)
+            saved_image_url = f"/api/history/images/{saved_filename}"
+        except OSError:
+            logger.exception("Could not save permanent plant image")
+
     # 5. Persist prediction history to PostgreSQL
     prediction_id = None
     history_warning = None
@@ -473,7 +509,7 @@ async def upload_plant_image(
             crop_name=crop_name,
             disease_id=disease_id,
             confidence=result["confidence"],
-            image_url=None,
+            image_url=saved_image_url,
             model_version="efficientnet_v2_s"
         )
     except Exception:
@@ -489,6 +525,7 @@ async def upload_plant_image(
         "status": result["status"],
         "uncertainty_warning": result.get("uncertainty_warning"),
         "is_healthy": result.get("is_healthy", False),
+        "is_uncertain": result.get("is_uncertain", False),
         "prediction_id": prediction_id,
         "history_saved": prediction_id is not None,
         "history_warning": history_warning,

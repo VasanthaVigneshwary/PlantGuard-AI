@@ -16,6 +16,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@127.0.0.1:1/test")
 
 from main import app  # noqa: E402
+from routes.plant import localize_disease_payload  # noqa: E402
 from services import database_service  # noqa: E402
 
 
@@ -106,10 +107,14 @@ class PlantApiTests(unittest.TestCase):
         self.assertEqual(body["symptoms"], [])
         self.assertTrue(body["history_saved"])
         self.assertEqual(body["prediction_id"], 17)
+        self.assertFalse(body["is_uncertain"])
         save_prediction.assert_called_once()
         self.assertEqual(save_prediction.call_args.kwargs["crop_name"], "Apple")
         self.assertIsNone(save_prediction.call_args.kwargs["disease_id"])
-        self.assertIsNone(save_prediction.call_args.kwargs["image_url"])
+        self.assertRegex(
+            save_prediction.call_args.kwargs["image_url"],
+            r"^/api/history/images/[0-9a-f]{32}\.jpg$",
+        )
         self.assertTrue(all(not path.exists() for path in seen_temp_paths))
 
     def test_separate_real_uploads_are_inferred_from_their_own_image_bytes(self):
@@ -355,6 +360,41 @@ class ApplicationRateVerificationTests(unittest.TestCase):
         self.assertEqual(rates[0]["disease_id"], 42)
         self.assertEqual(rates[0]["product_formulation"], "Product 50% WP")
         self.assertEqual(rates[0]["source_url"], "https://agritech.tnau.ac.in/label")
+        self.assertEqual(rates[0]["measurement_unit_key"], "g/acre")
+        self.assertEqual(rates[0]["basis_key"], "per acre")
+
+    def test_tamil_localization_preserves_canonical_rate_units(self):
+        payload = {
+            "message": "ok",
+            "status": "status",
+            "uncertainty_warning": "warning",
+            "history_warning": None,
+            "disease": {"name": "Apple scab", "crop_name": "Apple", "description": None},
+            "symptoms": [],
+            "causes": [],
+            "treatments": [{
+                "name": "Treatment",
+                "type": "chemical",
+                "description": None,
+                "instructions": None,
+                "precautions": None,
+                "application_rates": [{
+                    "application_method": "Spray",
+                    "measurement_unit": "g/acre",
+                    "measurement_unit_key": "g/acre",
+                    "basis": "per acre",
+                    "basis_key": "per acre",
+                    "notes": "",
+                }],
+            }],
+            "prevention": [],
+        }
+
+        localized = localize_disease_payload(payload, "ta")
+        rate = localized["treatments"][0]["application_rates"][0]
+        self.assertEqual(rate["basis_key"], "per acre")
+        self.assertEqual(rate["measurement_unit_key"], "g/acre")
+        self.assertNotEqual(rate["basis"], "per acre")
 
     def test_generated_notification_templates_are_not_returned_as_records(self):
         connection = Mock()
