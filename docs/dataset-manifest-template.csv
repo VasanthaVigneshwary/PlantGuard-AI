@@ -1,0 +1,2 @@
+image_id,image_path,crop,health_status,disease_label,label_source,reviewer,source_id,source_url,license,attribution,plant_id,capture_group,image_source,label_confidence,review_status,duplicate_group_id,training_permission,original_image_redistribution,model_weights_redistribution,rights_evidence,rights_restrictions
+# health_status is the independently established state; disease_label is optional exact identity. The three permission fields describe separate uses. Use allowed, not_allowed, or unknown; unknown is never approval. Cite evidence and record conditions/restrictions.
