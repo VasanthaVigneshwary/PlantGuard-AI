@@ -1,0 +1,4 @@
+comparison,match_type,test_member,reference_member,test_sha256,reference_sha256,hamming_distance,result
+test_vs_stage3_generated_train_split,summary,,,,,,8154 test rows checked against 37993 reference rows; exact overlapping test images=0; path overlaps=0
+test_vs_stage3_generated_validation_split,summary,,,,,,8154 test rows checked against 8158 reference rows; exact overlapping test images=0; path overlaps=0
+test_vs_Stage3_generated_train_and_validation,perceptual_hash_availability,,,,,,"NOT_RUN; installed candidates: none of imagehash, imagededup, cv2, phash"

@@ -66,15 +66,22 @@ All new completion deliverables, recovered Colab copies, and safety copies are u
 - `STAGE1_DIAGNOSIS.md`, `STAGE2_AUDIT.md`, `TRAINING_PLAN.md`
 - `STAGE_STATUS.md`, `STATE.md`, `FINAL_PROJECT_REPORT.md`
 - `recovery/RECOVERY_REPORT.md`, `recovery/MODEL_PROVENANCE.md`, `recovery/RECOVERY_PLAN.md`, and the four copied evaluation outputs plus the related screenshot in `recovery/colab_results/`
+- `leakage_audit/AUDIT_REPORT.md`, `file_inventory.csv`, `train_test_overlap.csv`, `exact_duplicate_groups.csv`, `notebook_training_evidence.md`, `model_provenance.md`, `overlap_summary.json`, and the read-only `audit.py`
 - Timestamped `STATE_before_phase*_update_20261126.md` copies and `TRAINING_PLAN_before_revision_20261126.md`
 - `FINAL_PROJECT_REPORT_before_frontend_update_20261126.md`, `STAGE_STATUS_before_frontend_update_20261126.md`, `STATE_before_frontend_update_20261126.md`, and `frontend_page_before_top3_20261126.tsx` safety copies
 
-Only one existing source file was modified: `frontend/app/page.tsx`, to display the top-three candidates the API already returns. Its original is backed up under `final_completion/`. All other existing user changes/untracked files were preserved. No commits, pushes, reset, clean, or staging commands were performed.
+Only one existing application source file was modified: `frontend/app/page.tsx`, to display the top-three candidates the API already returns. Its original is backed up under `final_completion/`. The audit also added a read-only script and audit reports; it did not change model/data/manifests/Stage 4. The completed recovery documentation and recovered result bundle were committed as `784c88464530127276f2ecb8ed35f42336310e1d`. No push, reset, clean, or unrelated staging was performed; other existing user changes/untracked files were preserved.
+
+## Final leakage and provenance audit
+
+The saved SHA-256 values show zero exact test/train or test/validation overlaps across the current Stage 3 generated manifests (8,154 test rows checked); all 38 labels and their output order match. There are 21 exact duplicate groups within the combined generated manifests, with none crossing splits. No suitable perceptual-hash library is installed, so near-duplicate screening was not run. These current splits do not establish membership in the model's earlier training run.
+
+The recovered 100% PlantVillage report is arithmetically consistent with its 8,154-row test manifest, and its Colab notebook plausibly points to the current production ONNX inference path. It has no model or manifest hash; the original training/validation membership, checkpoint, logs, and export lineage remain unavailable. **Test-set independence and exact ONNX provenance are not verified.** Keep the result labeled “Historical 100% PlantVillage evaluation result — test-set independence and model provenance not yet verified.” The existing Stage 4 PlantDoc metrics remain separate and unchanged.
 
 ## Remaining blockers and next steps
 
-1. Make the original Google Drive training folder read-only accessible as described in `recovery/RECOVERY_PLAN.md` to recover the training notebook/config, checkpoints/history and export metadata. First compare hashes; do not retrain unless recovery proves impossible and training is necessary.
-2. Recover exact ONNX training source, preprocessing config, export lineage, and image-level training records. Without these, exact Colab model binding and test independence remain limited.
+1. Make the original Google Drive training folder read-only accessible as described in `recovery/RECOVERY_PLAN.md` to recover the training notebook/config, original split membership, checkpoints/history and export metadata. Compare hashes and membership before making any independence claim; do not retrain unless recovery proves impossible and training is necessary.
+2. Resolve the original training image count claim (54,306) against the verified 54,305-image current manifests and recover exact ONNX training source, preprocessing config, export lineage, and image-level training records.
 3. Only if a new training run becomes necessary, obtain a supported GPU runtime and resolve TensorFlow Windows Code Integrity without bypassing security; freeze the preprocessing contract before training. Do not select preprocessing with PlantDoc.
 4. If a new training run is approved and feasible, use the existing 38-class manifests, save an experimental checkpoint/history, then evaluate the locked test once only if independence from training/model selection can be established.
 5. To establish real-world 38-class performance, collect a rights-cleared, expert-reviewed field dataset covering all 38 classes including healthy classes, with provenance and capture-group/duplicate controls.

@@ -1,0 +1,44 @@
+{
+  "manifest_rows": {
+    "test": 8154,
+    "train": 37993,
+    "validation": 8158
+  },
+  "test_sha_coverage": "8154/8154",
+  "exact_test_train_overlap_images": 0,
+  "exact_test_validation_overlap_images": 0,
+  "exact_member_path_test_train_overlap": 0,
+  "exact_member_path_test_validation_overlap": 0,
+  "all_split_exact_duplicate_groups": 21,
+  "all_split_exact_duplicate_extra_images": 21,
+  "cross_split_exact_duplicate_groups": 0,
+  "class_order_matches_class_names": true,
+  "classes_in_test": 38,
+  "recovered_eval_summary": {
+    "images": 8154,
+    "classes": 38,
+    "accuracy": 1.0,
+    "macro_precision": 1.0,
+    "macro_recall": 1.0,
+    "macro_f1": 1.0,
+    "weighted_f1": 1.0,
+    "providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "test_manifest": "plantvillage_test.csv"
+  },
+  "recovered_confusion_matrix": {
+    "header_order_matches": true,
+    "row_order_matches": true,
+    "total": 8154,
+    "diagonal": 8154,
+    "off_diagonal": 0,
+    "supports_match_test_manifest": true
+  },
+  "recovered_per_class_values_all_1": true,
+  "recovered_eval_bundle_arithmetic_consistent": true,
+  "manifest_audit_recorded_cross_split_exact_hashes": 0,
+  "perceptual_hash_modules_found": [],
+  "scope_note": "These are exact comparisons among the current Stage 3 generated split manifests; they are not a comparison to the missing original model-training membership list."
+}
