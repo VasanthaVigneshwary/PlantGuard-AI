@@ -1,0 +1,46 @@
+stage: 4
+workflow: plantvillage_onnx_heldout_gpu_runtime_and_metrics
+status: prepared_pending_colab_execution
+purpose: same_source_heldout_evaluation_and_onnx_cuda_runtime_verification
+independent_validation_claim: false
+dataset:
+  name: PlantVillage
+  archive: datasets/plantvillage-source.zip
+  fixed_manifest: backend/ml/experiments/stage3_preflight/plantvillage_test.csv
+  expected_test_rows: 8154
+  expected_classes: 38
+  split_column: split
+  required_split_value: test
+  create_or_modify_split: false
+  verify_all_members_exist: true
+  verify_member_sha256_during_read: true
+model:
+  onnx: backend/ml/models/efficientnet_v2_s_best.onnx
+  external_tensor_data: backend/ml/models/efficientnet_v2_s_best.onnx.data
+  class_mapping: backend/ml/models/classes.json
+  output_classes: 38
+  input_shape: [batch, 3, 224, 224]
+  preprocessing_source: backend/ml/predict.py::preprocess_image
+  modify_model_or_weights: false
+runtime:
+  target: Google Colab NVIDIA T4 (user-reported; pending notebook confirmation)
+  onnxruntime_package: onnxruntime-gpu
+  providers_priority: [CUDAExecutionProvider, CPUExecutionProvider]
+  cuda_node_assignment_profile_required: true
+  require_cuda_node_before_full_evaluation: true
+  batch_size: 128
+evaluation:
+  metrics: [accuracy_top1, accuracy_top3, macro_precision, macro_recall, macro_f1, weighted_precision, weighted_recall, weighted_f1]
+  per_class: [support, precision, recall, f1]
+  confusion_matrix: all_38_classes
+  confidence: raw_softmax_score_uncalibrated
+  test_data_tuning_or_threshold_changes: false
+outputs:
+  root: backend/ml/experiments/stage4_independent_validation/plantvillage_onnx_heldout_gpu
+  per_run_directory: true
+  overwrite_existing_run: false
+limitations:
+  - original model training membership is unavailable; test independence is not established
+  - the historical 100 percent result has no recorded model hash and is not treated as this run's result
+  - CPU fallback may be reported if ONNX Runtime assigns some nodes to CPU
+  - Colab CUDA activation and new metrics remain pending execution
