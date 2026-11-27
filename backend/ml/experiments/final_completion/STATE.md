@@ -13,5 +13,5 @@
 - Tests: 7 core tests, 14 reliability tests, 5 safe API tests passed; frontend lint/typecheck passed. pytest unavailable.
 - Backups: recovery/backups/*pre_core_stabilization_20261127.bak.
 - Deployment checklist: DEPLOYMENT_CHECKLIST.md; production configuration remains unverified.
-- Pending: review/stage only relevant files, commit, push to existing origin/master, verify synchronization.
+- Git: core stabilization commit 3ca84d8932a79773bde1b6679e55ca962d2b4f25 and prior Stage 4 work pushed; origin/master verified at 3ca84d89.
 - Unrelated pre-existing worktree changes remain unstaged and preserved.
