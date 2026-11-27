@@ -1,7 +1,7 @@
 # Plant Guard AI - Final Completion Report
 
-**Date:** 2026-11-26  
-**Overall:** Evidence gathering, reuse, and safe functional checks are complete. The requested model project is **not ready to claim completed 38-class training or independent 38-class validation**. The frontend now displays the existing API top-three outputs. No model, dataset, manifest, database/schema, or backend file was modified.
+**Date:** 2026-11-27
+**Overall:** Evidence gathering, reuse, and safe functional checks are complete. The requested model project is **not ready to claim completed 38-class training or independent 38-class validation**. The frontend now displays the API top-three outputs. No model weights, dataset, manifest, database schema, or records were modified. Backend inference and upload validation code were updated and tested.
 
 ## Previously completed work reused
 
@@ -33,7 +33,7 @@ No reproducible EfficientNetV2-S training run, epoch history, source checkpoint,
 
 ### PlantVillage
 
-Training accuracy: unavailable. Validation accuracy: unavailable. The recovered Colab report states **100% top-1 accuracy** on 8,154 test images and 38 classes; macro precision, recall, F1 and weighted F1 are also 100%. Its matrix and all class supports match the local held-out test manifest exactly. Treat this as a recovered test-split result with verified arithmetic, not a fresh rerun. The JSON does not hash the model or data, and independence from the model's documented PlantVillage training source cannot be confirmed. The test was not rerun.
+Training accuracy remains unavailable. A new local CPU run on the existing validation manifest evaluated 8,158/8,158 images across 38 classes; top-1 accuracy was 100%. The recovered Colab report states **100% top-1 accuracy** on 8,154 test images and 38 classes; macro precision, recall, F1 and weighted F1 are also 100%. Its matrix and all class supports match the local held-out test manifest exactly. Treat this as a recovered test-split result with verified arithmetic, not a fresh rerun. The JSON does not hash the model or data, and independence from the model's documented PlantVillage training source cannot be confirmed. The test was not rerun.
 
 ### PlantDoc (existing Stage 4 baseline, reused)
 
@@ -48,13 +48,13 @@ Training accuracy: unavailable. Validation accuracy: unavailable. The recovered 
 - `test_model_reliability.py`: 14 tests passed, including model signature, preprocessing shape/dtype/RGB normalization, EXIF, index mapping, repeatability, corrupt/missing/low-detail input handling, unsupported-input warning, and distinct real fixtures.
 - `test_model.py`: two real fixture smoke predictions passed (sample leaf -> Apple scab; webp fixture -> Tomato early blight). These are functional checks, not accuracy measurements.
 - API rejected empty, corrupt, low-detail, and >10 MiB synthetic uploads. Fifty CPU inference runs on the sample fixture after five warmups: median 35.46 ms, p95 40.02 ms. This is a single local fixture benchmark, not a production capacity guarantee.
-- Raw softmax scores are uncalibrated. No temperature scaling, confidence threshold selection, or OOD guarantee was attempted. PlantDoc was not used for any tuning.
+- Raw softmax scores are uncalibrated. A validation-only selective-prediction threshold was chosen to target at least 95% selective accuracy while maximizing coverage; it retained 8,158/8,158 validation images at 100% observed validation accuracy. This does not establish calibration or OOD detection. PlantDoc was not used for threshold selection.
 
 ## Phase 6 - Application integration
 
-- Five safe existing FastAPI tests passed: health, CORS, empty upload, corrupt image, and low-detail image.
-- Two real sample-image upload requests (English and Tamil) returned 200, correct canonical class mapping, top-5 outputs, raw score and uncertainty fields. Database/persistence calls were mocked read-only and permanent image writes were blocked during this check. This verifies the local API path, not deployment.
-- Frontend fix: added the API's optional `top_predictions` type and a localized top-three panel; no inference or response contract was changed.
+- Five safe existing FastAPI tests passed after the input-quality checks: health, CORS, empty upload, corrupt image, and low-detail image.
+- Earlier English and Tamil upload checks returned 200 with top-5 outputs before the current response was narrowed. The current real-image API contract test returned three mapped classes with score fields and uncertainty; database/persistence calls were mocked and permanent image writes were blocked. This verifies local integration, not deployment.
+- Frontend changes retain the existing response fields and add a localized top-three model-score panel, an uncertainty alias, localized invalid-image messaging, and the PlantDoc field-performance notice. The API now returns exactly three top predictions with canonical class, localized display name, score, and an explicit uncalibrated-score label.
 - Read-only database audit: 38/38 disease class mappings, no missing or duplicate mapping, all five detail categories covered; all 27 application-rate records remain unverified and should not be used as validated product-rate guidance.
 - Frontend validation: ESLint completed with 0 errors and 2 existing `<img>` optimization warnings; TypeScript `npx tsc --noEmit` passed. No frontend production build was run.
 - No full backend suite was run because some existing endpoint tests persist uploaded images into `backend/uploads`, which contains pre-existing untracked user files. pytest is absent and was not installed.
@@ -88,3 +88,16 @@ The recovered 100% PlantVillage report is arithmetically consistent with its 8,1
 6. Review application-rate source verification before those records are presented as recommendations.
 
 **Readiness decision:** current application inference is functionally operational in local tests; model training is not complete, PlantVillage held-out accuracy is unverified, and independent external validation covers only 16 classes. Do not claim Master Prompt 1 completion or full 38-class independent validation yet.
+
+
+## Evaluation validity
+
+- **Artifact hashes:** repository `efficientnet_v2_s_best.onnx` is IDENTICAL to the supplied Colab SHA-256 `14c03ae2b47b23a90a0176e70fe2fc46077fc5ae26dc46813966abdee0eb0c0a`. Its `.data` companion is IDENTICAL to `038e6093bb41434def59a3c2375fbfc13c86f6af046e7f0a5b7b9015aa29b497`.
+- **Preprocessing parity:** verified line-by-line: EXIF transpose; RGB conversion; direct 224?224 bilinear resize (no crop); divide by 255; ImageNet mean/std normalization; NCHW float32. ONNX input is `input`, output is `logits` with 38 classes.
+- **PlantVillage test:** the supplied/recovered Colab evidence reports 8,154/8,154 correct (100%) with 100% macro precision, recall, macro F1, and weighted F1. This is an in-distribution result. The reported run was not independently rerun here; the exact test accuracy remains a recovered result.
+- **Manifest overlap:** the supplied Colab audit reports zero path, SHA-256, and normalized-stem overlap between the supplied 37,993-row training and 8,154-row testing manifests. This establishes file-level separation for those manifests only. Original model training/model-selection membership and training-time use of the test images remain unverified.
+- **Validation threshold:** local CPU evaluation of all 8,158 rows in the existing labeled validation manifest achieved 100% top-1 accuracy. The max-softmax score cutoff is `0.6628152132034302`; with `score < cutoff` marked uncertain, the run retained 100% coverage and 100% observed validation accuracy. Every selected image SHA-256 matched its manifest entry. The cutoff is selected on this validation split and is a selective-prediction heuristic, not a calibrated probability or OOD detector. Evidence: `backend/ml/uncertainty_threshold.json`.
+- **PlantDoc:** remains the external real-world performance indicator: 123 eligible images, 19.51% top-1, 37.40% top-3, and 19.47% macro F1 across 16 mapped classes. It is not directly comparable to PlantVillage's controlled, 38-class split.
+- **Database:** read-only audit found 38/38 unique class records with nonblank disease names and treatment information; no missing or incomplete disease/treatment classes. All 27 application-rate records have unverified source metadata.
+- **Tests actually run:** seven focused core-contract tests passed; 14 existing model-reliability tests passed; five safe API tests passed; frontend ESLint had zero errors and two existing image-element warnings; `npx tsc --noEmit` passed. `pytest -q` could not start because pytest is not installed in the available Python environment; no dependency was installed. The ONNX validation run used CPUExecutionProvider, not CUDA.
+- **Interpretation:** 100% PlantVillage validation/test scores do not resolve model provenance or independent model-level validation. PlantDoc's lower result indicates weak transfer on its limited real-world subset; it is not a directly comparable 38-class benchmark.

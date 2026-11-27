@@ -21,10 +21,19 @@ interface PredictionResult {
   filename?: string;
   prediction: string;
   confidence: number;
+  top_predictions?: {
+    class: string;
+    crop?: string;
+    condition?: string;
+    display_name?: string;
+    confidence: number;
+    score?: number;
+  }[];
   status?: string;
   uncertainty_warning?: string | null;
   is_healthy?: boolean;
   is_uncertain?: boolean;
+  uncertain?: boolean;
   history_saved?: boolean;
   history_warning?: string | null;
   disease: {
@@ -183,6 +192,10 @@ const translations: Record<Language, Record<string, string>> = {
     modelCandidateLabel: "Model class candidate:",
     uncertainResultNote: "The model does not include both healthy and diseased classes for this crop, so it cannot distinguish them reliably. Try a clear single-leaf photo or consult a qualified agricultural expert.",
     modelConfidence: "Raw Model Score (Not Calibrated)",
+    topModelPredictions: "Top 3 model scores",
+    topModelPredictionsNote: "These are uncalibrated model scores, not probabilities.",
+    fieldAccuracyNotice: "Trained on lab images; accuracy on field photos is much lower (19.5% on an external test). Use as guidance only.",
+    invalidImageContent: "This image cannot be analyzed. Choose a clear, non-blank plant photo at least 64 by 64 pixels.",
     whatDoesThisMean: "What does this result mean?",
     aboutCondition: "About This Condition",
     commonSymptoms: "Common Symptoms",
@@ -249,7 +262,7 @@ const translations: Record<Language, Record<string, string>> = {
     supportedFormats: "Supported image formats: JPG, JPEG, PNG, WEBP",
     invalidImageType: "Choose a JPG, JPEG, PNG, or WEBP image.",
     unreadableImage: "This file could not be read as an image. Choose another image.",
-    imageTooSmall: "The image is too small. Choose an image at least 32 pixels wide and high.",
+    imageTooSmall: "The image is too small. Choose an image at least 64 pixels wide and high.",
     imageTooLarge: "The image is too large. Choose an image with no more than 40 million pixels.",
     selectedImage: "Selected image",
     plantImagePreview: "Your plant image",
@@ -359,6 +372,10 @@ const translations: Record<Language, Record<string, string>> = {
     modelCandidateLabel: "மாதிரியின் சாத்தியமான வகுப்பு:",
     uncertainResultNote: "இந்தப் பயிருக்கான ஆரோக்கியமான மற்றும் நோயுற்ற வகுப்புகள் இரண்டும் மாதிரியில் இல்லை; எனவே அவற்றை நம்பகமாக வேறுபடுத்த முடியாது. ஒரு இலையின் தெளிவான படத்தை முயற்சிக்கவும் அல்லது தகுதியான வேளாண் நிபுணரிடம் ஆலோசனை பெறவும்.",
     modelConfidence: "மாதிரியின் மூல மதிப்பெண் (அளவுத்திருத்தம் செய்யப்படவில்லை)",
+    topModelPredictions: "முதல் 3 மாதிரி மதிப்பெண்கள்",
+    topModelPredictionsNote: "இவை அளவுத்திருத்தம் செய்யப்படாத மாதிரி மதிப்பெண்கள்; நிகழ்தகவுகள் அல்ல.",
+    fieldAccuracyNotice: "ஆய்வகப் படங்களில் பயிற்சியளிக்கப்பட்டது; வெளிப்புறச் சோதனையில் களப் புகைப்படத் துல்லியம் மிகவும் குறைவு (19.5%). வழிகாட்டுதலாக மட்டுமே பயன்படுத்தவும்.",
+    invalidImageContent: "இந்தப் படத்தைப் பகுப்பாய்வு செய்ய முடியாது. தெளிவான, வெற்றுப் படமல்லாத, குறைந்தது 64 × 64 பிக்சல் தாவரப் படத்தைத் தேர்ந்தெடுக்கவும்.",
     whatDoesThisMean: "இந்த முடிவு அர்த்தப்படுத்துவது எது?",
     aboutCondition: "இந்த நிலை பற்றிய தகவல்",
     commonSymptoms: "பொதுவான அறிகுறிகள்",
@@ -425,7 +442,7 @@ const translations: Record<Language, Record<string, string>> = {
     supportedFormats: "ஆதரிக்கப்படும் பட வடிவங்கள்: JPG, JPEG, PNG, WEBP",
     invalidImageType: "JPG, JPEG, PNG அல்லது WEBP படத்தைத் தேர்ந்தெடுக்கவும்.",
     unreadableImage: "இந்தக் கோப்பைப் படமாகத் திறக்க முடியவில்லை. வேறு படத்தைத் தேர்ந்தெடுக்கவும்.",
-    imageTooSmall: "படம் மிகவும் சிறியது. குறைந்தது 32 × 32 பிக்சல்கள் உள்ள படத்தைத் தேர்ந்தெடுக்கவும்.",
+    imageTooSmall: "படம் மிகவும் சிறியது. குறைந்தது 64 × 64 பிக்சல்கள் உள்ள படத்தைத் தேர்ந்தெடுக்கவும்.",
     imageTooLarge: "படம் மிகவும் பெரியது. 40 மில்லியன் பிக்சல்களுக்கு மிகாத படத்தைத் தேர்ந்தெடுக்கவும்.",
     selectedImage: "தேர்ந்தெடுக்கப்பட்ட படம்",
     plantImagePreview: "உங்கள் தாவரப் படம்",
@@ -864,7 +881,7 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          data.detail || "Unable to analyze image."
+          response.status === 400 ? t.invalidImageContent : data.detail || "Unable to analyze image."
         );
       }
 
@@ -1699,7 +1716,7 @@ export default function Home() {
                 </p>
 
                 <h2 className="mt-2 text-4xl font-black md:text-5xl">
-                  {result.is_uncertain
+                  {(result.uncertain ?? result.is_uncertain)
                     ? t.uncertainResult
                     : result.is_healthy ? t.healthyResult : diseaseData.disease}
                 </h2>
@@ -1762,6 +1779,36 @@ export default function Home() {
                   )}
 
                 </div>
+
+                {result.top_predictions && result.top_predictions.length > 0 && (
+                  <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+                    <h3 className="text-lg font-bold text-slate-900">
+                      {t.topModelPredictions}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {t.topModelPredictionsNote}
+                    </p>
+                    <ol className="mt-4 space-y-3">
+                      {result.top_predictions.slice(0, 3).map((item, index) => {
+                        const label = getLocalizedDisplayName(item.condition || item.display_name || item.class, language);
+                        return (
+                          <li key={`${item.class}-${index}`} className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
+                            <span className="font-medium text-slate-800">
+                              {index + 1}. {label}
+                            </span>
+                            <span className="shrink-0 text-sm font-semibold text-slate-700">
+                              {(item.score ?? item.confidence).toFixed(2)}%
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                )}
+
+                <p className="mt-4 text-sm font-medium text-amber-800" role="note">
+                  {t.fieldAccuracyNotice}
+                </p>
 
                 {/* EXPLANATION */}
                 <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 p-6">

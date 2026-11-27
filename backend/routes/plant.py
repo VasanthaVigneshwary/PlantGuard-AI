@@ -8,7 +8,7 @@ import io
 import tempfile
 import uuid
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps, ImageStat
 from ml.predict import ImageQualityError, predict_disease
 from services.database_service import (
     get_disease_details_by_prediction,
@@ -241,6 +241,11 @@ def localize_disease_payload(payload, language):
     localized["uncertainty_warning"] = localize_text_for_language(payload.get("uncertainty_warning"), language)
     localized["history_warning"] = localize_text_for_language(payload.get("history_warning"), language)
 
+    for prediction in localized.get("top_predictions", []):
+        prediction["display_name"] = localize_display_name(prediction.get("display_name"), language)
+        prediction["crop"] = localize_display_name(prediction.get("crop"), language)
+        prediction["condition"] = localize_display_name(prediction.get("condition"), language)
+
     disease = localized.get("disease", {})
     if isinstance(disease, dict):
         disease["name"] = localize_display_name(disease.get("name"), language)
@@ -365,10 +370,10 @@ async def upload_plant_image(
                     detail=f"Unsupported image format ({img_format}). Only JPG, JPEG, PNG, and WEBP images are allowed."
                 )
             width, height = img.size
-            if width < 32 or height < 32:
+            if width < 64 or height < 64:
                 raise HTTPException(
                     status_code=400,
-                    detail="Image resolution is too low for reliable leaf disease diagnosis."
+                    detail="Image resolution is too low. Upload an image at least 64 by 64 pixels."
                 )
             if width * height > 40_000_000:
                 raise HTTPException(
@@ -376,6 +381,21 @@ async def upload_plant_image(
                     detail="Image dimensions are too large. Please upload a smaller image."
                 )
             img.verify()
+        image_stream.seek(0)
+        with Image.open(image_stream) as img:
+            rgb_image = ImageOps.exif_transpose(img).convert("RGB")
+            stats = ImageStat.Stat(rgb_image)
+            # These are basic input-quality checks, not out-of-distribution detection.
+            if max(stats.mean) < 8.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The image is near-black. Upload a visible, well-lit plant image."
+                )
+            if max(stats.stddev) < 1.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The image is blank or has too little visual contrast. Upload a clear plant image."
+                )
     except HTTPException:
         raise
     except Exception:
@@ -396,7 +416,7 @@ async def upload_plant_image(
             file_path = Path(buffer.name)
             buffer.write(contents)
 
-        result = await run_in_threadpool(predict_disease, file_path)
+        result = await run_in_threadpool(predict_disease, file_path, top_k=3)
     except ImageQualityError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -522,10 +542,14 @@ async def upload_plant_image(
         "filename": re.split(r"[/\\]", file.filename or "")[-1],
         "prediction": result["disease"],
         "confidence": result["confidence"],
+        "score": result["confidence"],
+        "score_type": "uncalibrated_model_score",
+        "score_label": "Uncalibrated model score (%)",
         "status": result["status"],
         "uncertainty_warning": result.get("uncertainty_warning"),
         "is_healthy": result.get("is_healthy", False),
         "is_uncertain": result.get("is_uncertain", False),
+        "uncertain": result.get("uncertain", result.get("is_uncertain", False)),
         "prediction_id": prediction_id,
         "history_saved": prediction_id is not None,
         "history_warning": history_warning,

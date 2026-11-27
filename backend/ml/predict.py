@@ -12,6 +12,9 @@ MODELS_DIR = BASE_DIR / "models"
 ONNX_MODEL_PATH = MODELS_DIR / "efficientnet_v2_s_best.onnx"
 CLASSES_JSON_PATH = MODELS_DIR / "classes.json"
 CLASS_NAMES_TXT_PATH = MODELS_DIR / "class_names.txt"
+UNCERTAINTY_THRESHOLD_PATH = BASE_DIR / "uncertainty_threshold.json"
+# Conservative fallback heuristic only; it is not a validated confidence threshold.
+DEFAULT_UNCERTAINTY_SCORE_THRESHOLD = 0.80
 
 # ImageNet normalization parameters for EfficientNetV2
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -102,6 +105,18 @@ def preprocess_image(image: Image.Image) -> np.ndarray:
     return np.expand_dims(np.transpose(arr, (2, 0, 1)), axis=0).astype(np.float32)
 
 
+def get_uncertainty_score_threshold() -> float:
+    """Read the validation-selected threshold; fall back to a documented heuristic."""
+    try:
+        with UNCERTAINTY_THRESHOLD_PATH.open("r", encoding="utf-8") as threshold_file:
+            threshold = float(json.load(threshold_file)["threshold_score"])
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("uncertainty threshold must be between 0 and 1")
+        return threshold
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return DEFAULT_UNCERTAINTY_SCORE_THRESHOLD
+
+
 def parse_class_label(class_name: str) -> tuple[str, str, bool]:
     """Split class label into crop, condition, and healthy flag."""
     if "___" in class_name:
@@ -184,32 +199,43 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
     crop_classes = [label for label in parsed_classes if label[0] == crop_name]
     crop_has_healthy_class = any(label[2] for label in crop_classes)
     crop_has_disease_class = any(not label[2] for label in crop_classes)
-    is_uncertain = not (crop_has_healthy_class and crop_has_disease_class)
+    score_threshold = get_uncertainty_score_threshold()
+    score_below_threshold = top_confidence < score_threshold
+    is_uncertain = score_below_threshold or not (crop_has_healthy_class and crop_has_disease_class)
 
     top_predictions = []
     for idx in sorted_indices[:top_k]:
         c_name, cond, _ = parse_class_label(classes[idx])
         top_predictions.append({
             "class": classes[idx],
+            "display_name": f"{c_name} — {cond}",
             "crop": c_name,
             "condition": cond,
+            "score": round(float(probs[idx]) * 100, 2),
+            "score_type": "uncalibrated_model_score",
             "confidence": round(float(probs[idx]) * 100, 2),
         })
 
     # Softmax cannot establish that an image is in-domain. In addition, crops
     # without both healthy and disease labels cannot support that distinction.
     status = "Uncalibrated model score"
-    if is_uncertain and crop_has_healthy_class:
+    if not crop_has_disease_class and crop_has_healthy_class:
         status = "Uncertain: disease classes are not supported for this crop"
         coverage_warning = (
             f"The model has no disease classes for {crop_name}; a healthy-class result "
             "cannot rule out disease."
         )
-    elif is_uncertain:
+    elif not crop_has_healthy_class:
         status = "Uncertain: healthy class is not supported for this crop"
         coverage_warning = (
             f"The model has no healthy class for {crop_name}; a disease-class result "
             "cannot confirm disease."
+        )
+    elif score_below_threshold:
+        status = "Uncertain: model score is below the validation-selected threshold"
+        coverage_warning = (
+            f"The model score is below the validation-selected threshold ({score_threshold:.2f}); "
+            "this threshold is a selective-prediction heuristic, not a calibrated probability."
         )
     else:
         coverage_warning = ""
@@ -223,6 +249,7 @@ def predict_disease(image_path: str | Path, top_k: int = 5) -> Dict[str, Any]:
         "condition": condition_name,
         "is_healthy": is_healthy,
         "is_uncertain": is_uncertain,
+        "uncertain": is_uncertain,
         "confidence": confidence_percentage,
         "status": status,
         "uncertainty_warning": uncertainty_warning,
