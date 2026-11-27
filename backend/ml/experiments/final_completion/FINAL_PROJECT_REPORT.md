@@ -101,3 +101,17 @@ The recovered 100% PlantVillage report is arithmetically consistent with its 8,1
 - **Database:** read-only audit found 38/38 unique class records with nonblank disease names and treatment information; no missing or incomplete disease/treatment classes. All 27 application-rate records have unverified source metadata.
 - **Tests actually run:** seven focused core-contract tests passed; 14 existing model-reliability tests passed; five safe API tests passed; frontend ESLint had zero errors and two existing image-element warnings; `npx tsc --noEmit` passed. `pytest -q` could not start because pytest is not installed in the available Python environment; no dependency was installed. The ONNX validation run used CPUExecutionProvider, not CUDA.
 - **Interpretation:** 100% PlantVillage validation/test scores do not resolve model provenance or independent model-level validation. PlantDoc's lower result indicates weak transfer on its limited real-world subset; it is not a directly comparable 38-class benchmark.
+
+**Real-world experiment preparation**
+- Field inventory and leakage-controlled splits are prepared: 1,069 train / 268 validation; PlantDoc coverage is 17 of 38 classes.
+- Training/export/evaluation scripts are ready for manual Colab T4 use; the new experiment has not been trained or evaluated.
+- The 123-image PlantDoc evaluation set and 8,154-image PlantVillage test set remain excluded from training and selection.
+- Recommendation: NEEDS MORE DATA; model replacement is not authorized.
+
+**Frozen-backbone bake-off and knowledge-base closeout (2026-11-27)**
+- Completed the offline-only preflight and runner. Split integrity and protected-image checks passed: 0 field train/validation group overlap, 0 PlantVillage train/test exact overlap, and 0 protected SHA/pHash≤6 matches; protected SHA-256 values were unchanged before/after.
+- The four requested encoders are BLOCKED locally: production ONNX exposes logits only; DINOv2 S/B and BioCLIP lack required dependencies and cached weights. The runner recorded 0 metrics. No weights were downloaded and no embeddings/classifiers were produced.
+- The runner now verifies the 123 PlantDoc image hashes before and after execution. Its available-model path selects LogisticRegression C on field_val before extracting any PlantVillage-test or PlantDoc evaluation features.
+- Existing artifacts passed three-script compilation and eight prepared-artifact integrity tests. The new preflight passed. No backend/frontend suite was rerun; pytest is unavailable and some endpoint tests write into the existing uploads directory.
+- Website audit remains a provenance gap: all 38 disease records contain text and map uniquely; Tomato Septoria is returned by the API; frontend correctly hides guidance without verified source metadata; all 27 application-rate records remain unverified. Production site files were not changed.
+- Full status, licensing notes, result accounting, and next-run commands: `realworld/bakeoff/BAKEOFF.md`; audit details: `website_knowledge_audit_20261127.md`.

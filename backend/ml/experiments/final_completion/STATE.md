@@ -1,17 +1,17 @@
-﻿# Final Completion State
-
+# Final Completion State
 - Updated: 2026-11-27
-- Core prediction stabilization: complete locally; deployment verification remains pending.
-- ONNX hash IDENTICAL: 14c03ae2b47b23a90a0176e70fe2fc46077fc5ae26dc46813966abdee0eb0c0a.
-- External tensor hash IDENTICAL: 038e6093bb41434def59a3c2375fbfc13c86f6af046e7f0a5b7b9015aa29b497.
-- Production preprocessing matches the specified Colab sequence line-by-line.
-- Existing validation split: 8,158/8,158 correct, 38 classes, SHA checks passed, CPUExecutionProvider.
-- Validation-selected uncertain cutoff: 0.6628152132034302, 95% target accuracy, 100% validation coverage; heuristic only.
-- Historical PlantVillage test report: 8,154/8,154 correct; in-distribution; exact model training independence remains unverified.
-- PlantDoc external indicator: 123 images, 19.51% top-1, 37.40% top-3, 19.47% macro-F1.
-- Database: all 38 class records/details present; 27 application-rate sources unverified.
-- Tests: 7 core tests, 14 reliability tests, 5 safe API tests passed; frontend lint/typecheck passed. pytest unavailable.
-- Backups: recovery/backups/*pre_core_stabilization_20261127.bak.
-- Deployment checklist: DEPLOYMENT_CHECKLIST.md; production configuration remains unverified.
-- Git: core stabilization commit 3ca84d8932a79773bde1b6679e55ca962d2b4f25 and prior Stage 4 work pushed; origin/master verified at 3ca84d89.
-- Unrelated pre-existing worktree changes remain unstaged and preserved.
+- Core prediction stabilization remains unchanged; production model, datasets, and source manifests preserved.
+- Existing Stage 4 PlantDoc indicator: 123 eligible images; crop accuracy 35.77%, disease top-1 19.51%, top-3 37.40%, macro-F1 19.47%.
+- Prepared data: 1,069 field-train / 268 field-val; 17/38 classes covered; zero train/validation group overlap.
+- PlantVillage manifests: 37,993 train source rows; 8,154 fixed test rows; all 38 train classes retained.
+- Protected evaluation: 123 PlantDoc images; pre/post SHA-256 identical; zero exact SHA or pHash≤6 matches to train/validation.
+- Bake-off scripts completed; cached-only run completed as BLOCKED with zero metrics; no model weights downloaded.
+- Backbones blocked: production ONNX logits-only graph; DINOv2 S/B and BioCLIP dependencies/checkpoints unavailable.
+- No feature extraction, classifier fitting, new-model evaluation, training, export, or parity run occurred.
+- Website knowledge audit: 38/38 records mapped with text; API returns Tomato Septoria; source provenance absent; 0/27 application rates verified.
+- Website fail-closed guidance behavior preserved; no agricultural recommendations or rates invented.
+- Tests: three-script py_compile passed; preparation artifact unittest passed (8/8); preflight passed; bake-off runner produced explicit BLOCKED status.
+- Plain system Python and `.venv` unavailable/broken; `.venv.stage3` was used. pytest is unavailable.
+- Reports: `realworld/bakeoff/BAKEOFF.md`, `website_knowledge_audit_20261127.md`, and `FINAL_PROJECT_REPORT.md`.
+- Remaining action: run the cached-only bake-off on Colab T4 after provisioning compatible dependencies and licensed model caches; leave PlantDoc/PlantVillage test locked until validation-only C selection is complete.
+- No commit or push has yet been made for this completion pass.
