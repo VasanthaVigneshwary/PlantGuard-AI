@@ -13,6 +13,29 @@ import {
   getDisplayableDiseaseGuidance,
   getGuidanceUnavailableMessage,
 } from "../lib/disease-guidance.mjs";
+import { Badge, Button, Card, Navbar } from "../components/ui";
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  Bot,
+  Calculator,
+  Camera,
+  ChartNoAxesColumnIncreasing,
+  CircleAlert,
+  Dna,
+  ImagePlus,
+  Info,
+  Leaf,
+  LoaderCircle,
+  RotateCcw,
+  Search,
+  Send,
+  ShieldCheck,
+  Stethoscope,
+  Upload,
+  X,
+} from "lucide-react";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -166,12 +189,12 @@ const translations: Record<Language, Record<string, string>> = {
     noNotifications: "No notifications right now.",
     assistantOnline: "Assistant online",
     analyzeAnotherPlant: "Analyze Another Plant",
-    welcomeBot: "Hi! 🌱 I'm Plant Guard AI. Ask me about plant diseases, symptoms, prevention, or how to use the disease detector.",
+    welcomeBot: "Hello. Ask me about plant diseases, symptoms, prevention, or how to use the disease detector.",
     heroBadge: "AI-powered plant health detection",
-    heroCTA: "🔍 Detect Disease",
+    heroCTA: "Scan a Leaf",
     heroSecondary: "How It Works →",
     heroMain: "Protect your plants with intelligent AI.",
-    heroSubtitle: "Upload a plant leaf image and Plant Guard AI uses deep learning to identify possible diseases and provide useful plant-care guidance.",
+    heroSubtitle: "Upload a clear leaf photo to review the model’s candidate classes. Verified agricultural information appears only when a trusted source is available.",
     uploadLabel: "Upload leaf image",
     chooseImage: "Choose Image",
     analyzePlant: "Analyze Plant",
@@ -194,7 +217,12 @@ const translations: Record<Language, Record<string, string>> = {
     modelConfidence: "Raw Model Score (Not Calibrated)",
     topModelPredictions: "Top 3 model scores",
     topModelPredictionsNote: "These are uncalibrated model scores, not probabilities.",
-    fieldAccuracyNotice: "Trained on lab images; accuracy on field photos is much lower (19.5% on an external test). Use as guidance only.",
+    fieldAccuracyNotice: "An earlier external field-photo check scored 19.5% top-1 on 123 images. This limited result is not a performance guarantee.",
+    verifiedOnly: "Verified information only",
+    modelClassesSummary: "38 supported model classes",
+    fieldLimitSummary: "Field results need expert review",
+    heroIllustration: "Illustration of a healthy plant leaf",
+    guidanceAvailabilityNote: "Agricultural guidance is shown only when the knowledge base includes a verified source.",
     invalidImageContent: "This image cannot be analyzed. Choose a clear, non-blank plant photo at least 64 by 64 pixels.",
     whatDoesThisMean: "What does this result mean?",
     aboutCondition: "About This Condition",
@@ -292,7 +320,7 @@ const translations: Record<Language, Record<string, string>> = {
     howProcessingDescription: "The image is processed by the FastAPI backend and analyzed using a trained deep learning model.",
     howGuidanceDescription: "View the predicted disease, confidence score, symptoms, recommended action and prevention tips.",
     featureRecognition: "Deep learning based plant disease prediction.",
-    featureConfidence: "Understand how confident the model is in its prediction.",
+    featureConfidence: "Review the raw model score. It is not a calibrated probability.",
     featureGuidance: "View symptoms, treatment actions and prevention tips.",
     featureAssistant: "Ask basic questions about plant health using the assistant.",
     healthierPlants: "Technology for healthier plants",
@@ -307,7 +335,7 @@ const translations: Record<Language, Record<string, string>> = {
     featureInfoSymptoms: "Disease Information and Symptoms",
     featureInfoSymptomsText: "Provides useful information about detected conditions and symptoms.",
     featureTreatmentPrevention: "Treatment and Prevention Guidance",
-    featureTreatmentPreventionText: "Suggests practical plant-care actions and prevention measures.",
+    featureTreatmentPreventionText: "Displays agricultural guidance only when its source meets the verification rules.",
     featureTreatmentCalculator: "Treatment Calculator",
     featureTreatmentCalculatorText: "Estimates treatment quantity based on affected area and the agricultural application rate.",
     readyCheckPlant: "Ready to check your plant?",
@@ -346,12 +374,12 @@ const translations: Record<Language, Record<string, string>> = {
     noNotifications: "தற்சமயம் அறிவிப்புகள் இல்லை.",
     assistantOnline: "செயல்பாட்டில் உள்ளது",
     analyzeAnotherPlant: "மற்றொரு தாவரத்தை பகுப்பாய்வு செய்யுங்கள்",
-    welcomeBot: "வணக்கம்! 🌱 நான் Plant Guard AI. தாவர நோய்கள், அறிகுறிகள், தடுப்பு அல்லது நோய் கண்டறிதல் பற்றி கேளுங்கள்.",
+    welcomeBot: "வணக்கம். தாவர நோய்கள், அறிகுறிகள், தடுப்பு அல்லது நோய் கண்டறிதல் பற்றி கேளுங்கள்.",
     heroBadge: "AI-ஆல் இயக்கப்படும் தாவர ஆரோக்கிய கண்டறிதல்",
-    heroCTA: "🔍 நோயைக் கண்டறி",
+    heroCTA: "இலையைப் படமெடு",
     heroSecondary: "இது எப்படி வேலை செய்கிறது →",
     heroMain: "நுண்ணறிவுள்ள AI-வுடன் உங்கள் தாவரங்களை பாதுகாக்கவும்.",
-    heroSubtitle: "ஒரு தாவர இலைப் படத்தை பதிவேற்றி, Plant Guard AI சாத்தியமான நோய்களைக் கண்டறிந்து பயனுள்ள பராமரிப்புக் குறிப்புகளை வழங்குகிறது.",
+    heroSubtitle: "தெளிவான இலைப் புகைப்படத்தைப் பதிவேற்றி, மாதிரி கணித்த சாத்தியமான வகைகளைப் பாருங்கள். நம்பகமான ஆதாரம் உள்ளபோது மட்டுமே சரிபார்க்கப்பட்ட வேளாண் தகவல்கள் காட்டப்படும்.",
     uploadLabel: "இலைப் படத்தை பதிவேற்றுக",
     chooseImage: "படத்தை தேர்ந்தெடு",
     analyzePlant: "தாவரத்தை பகுப்பாய்வு செய்",
@@ -374,7 +402,12 @@ const translations: Record<Language, Record<string, string>> = {
     modelConfidence: "மாதிரியின் மூல மதிப்பெண் (அளவுத்திருத்தம் செய்யப்படவில்லை)",
     topModelPredictions: "முதல் 3 மாதிரி மதிப்பெண்கள்",
     topModelPredictionsNote: "இவை அளவுத்திருத்தம் செய்யப்படாத மாதிரி மதிப்பெண்கள்; நிகழ்தகவுகள் அல்ல.",
-    fieldAccuracyNotice: "ஆய்வகப் படங்களில் பயிற்சியளிக்கப்பட்டது; வெளிப்புறச் சோதனையில் களப் புகைப்படத் துல்லியம் மிகவும் குறைவு (19.5%). வழிகாட்டுதலாக மட்டுமே பயன்படுத்தவும்.",
+    fieldAccuracyNotice: "123 படங்களைக் கொண்ட முந்தைய வெளிப்புற களப் புகைப்படச் சோதனையில் top-1 மதிப்பெண் 19.5% ஆக இருந்தது. இது குறைந்த அளவிலான முடிவு; செயல்திறன் உறுதி அல்ல.",
+    verifiedOnly: "சரிபார்க்கப்பட்ட தகவல் மட்டும்",
+    modelClassesSummary: "மாதிரியில் 38 வகைகள்",
+    fieldLimitSummary: "கள முடிவுகளுக்கு நிபுணர் ஆய்வு தேவை",
+    heroIllustration: "ஆரோக்கியமான தாவர இலையின் வரைபடம்",
+    guidanceAvailabilityNote: "அறிவு தளத்தில் நம்பகமான ஆதாரம் உள்ளபோது மட்டுமே வேளாண் வழிகாட்டல் காட்டப்படும்.",
     invalidImageContent: "இந்தப் படத்தைப் பகுப்பாய்வு செய்ய முடியாது. தெளிவான, வெற்றுப் படமல்லாத, குறைந்தது 64 × 64 பிக்சல் தாவரப் படத்தைத் தேர்ந்தெடுக்கவும்.",
     whatDoesThisMean: "இந்த முடிவு அர்த்தப்படுத்துவது எது?",
     aboutCondition: "இந்த நிலை பற்றிய தகவல்",
@@ -471,7 +504,7 @@ const translations: Record<Language, Record<string, string>> = {
     howProcessingDescription: "இலை படம் FastAPI பின்தளத்தால் செயலாக்கப்பட்டு, பயிற்சி பெற்ற ஆழ்ந்த கற்றல் மாதிரியால் பகுப்பாய்வு செய்யப்படுகிறது.",
     howGuidanceDescription: "கணிக்கப்பட்ட நோய், நம்பகத்தன்மை மதிப்பெண், அறிகுறிகள், பரிந்துரைக்கப்பட்ட நடவடிக்கை மற்றும் தடுப்பு குறிப்புகளைப் பாருங்கள்.",
     featureRecognition: "ஆழ்ந்த கற்றல் அடிப்படையிலான தாவர நோய் கணிப்பு.",
-    featureConfidence: "மாதிரி அதன் கணிப்பில் எவ்வளவு நம்பகமானது என்பதைப் புரிந்து கொள்ளுங்கள்.",
+    featureConfidence: "மூல மாதிரி மதிப்பைப் பாருங்கள். இது அளவுத்திருத்தப்பட்ட நிகழ்தகவு அல்ல.",
     featureGuidance: "அறிகுறிகள், சிகிச்சை நடவடிக்கைகள் மற்றும் தடுப்பு குறிப்புகளைப் பாருங்கள்.",
     featureAssistant: "உதவியாளரைப் பயன்படுத்தி தாவர ஆரோக்கியம் பற்றிய அடிப்படை கேள்விகளைக் கேளுங்கள்.",
     healthierPlants: "ஆரோக்கியமான தாவரங்களுக்கான தொழில்நுட்பம்",
@@ -486,7 +519,7 @@ const translations: Record<Language, Record<string, string>> = {
     featureInfoSymptoms: "நோய் தகவல் மற்றும் அறிகுறிகள்",
     featureInfoSymptomsText: "கண்டறியப்பட்ட நிலைகள் மற்றும் அறிகுறிகள் குறித்த பயனுள்ள தகவல்களை வழங்குகிறது.",
     featureTreatmentPrevention: "சிகிச்சை மற்றும் தடுப்பு வழிகாட்டல்",
-    featureTreatmentPreventionText: "தாவர பராமரிப்புக்கான நடைமுறை நடவடிக்கைகள் மற்றும் தடுப்பு நடவடிக்கைகளை பரிந்துரைக்கிறது.",
+    featureTreatmentPreventionText: "சரிபார்ப்பு விதிகளைப் பூர்த்தி செய்யும் ஆதாரம் இருந்தால் மட்டுமே வேளாண் வழிகாட்டல் காட்டப்படும்.",
     featureTreatmentCalculator: "சிகிச்சை கால்குலேட்டர்",
     featureTreatmentCalculatorText: "பாதிக்கப்பட்ட பகுதி மற்றும் விவசாய பயன்பாட்டு வீதத்தின் அடிப்படையில் சிகிச்சை அளவை மதிப்பிடுகிறது.",
     readyCheckPlant: "உங்கள் தாவரத்தைச் சரிபார்க்க வேண்டுமா?",
@@ -773,23 +806,6 @@ export default function Home() {
   };
 
   const notificationCount = notifications.length;
-
-  const getNotificationIcon = (notificationType?: string | null) => {
-    switch ((notificationType || "").toLowerCase()) {
-      case "monitoring":
-        return "🌿";
-      case "inspection":
-        return "🔍";
-      case "prevention":
-        return "🛡️";
-      case "treatment":
-        return "💧";
-      case "care":
-        return "💡";
-      default:
-        return "🌱";
-    }
-  };
 
   const fetchNotifications = async () => {
     setNotificationsLoading(true);
@@ -1140,69 +1156,28 @@ export default function Home() {
     : 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-800">
+    <main className="pg-app min-h-screen bg-slate-50 text-slate-800">
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-
-          <button
-            onClick={() => scrollToSection("home")}
-            className="flex items-center gap-3"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-green-100 text-2xl shadow-sm">
-              🌱
-            </div>
-
-            <div className="text-left">
-              <div className="text-lg font-extrabold tracking-tight text-green-800">
-                Plant Guard
-              </div>
-
-              <div className="text-xs font-medium text-slate-500">
-                {t.plantHealthAssistant}
-              </div>
-            </div>
+      <Navbar
+        brand={
+          <button onClick={() => scrollToSection("home")} className="text-left" aria-label="Plant Guard AI home">
+            <span className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[var(--pg-brand-900)]">
+              <Leaf size={22} strokeWidth={1.8} aria-hidden="true" />
+              Plant Guard AI
+            </span>
+            <span className="block pl-7 text-xs font-medium text-[var(--pg-ink-muted)]">{t.plantHealthAssistant}</span>
           </button>
-
-          <div className="hidden flex-wrap items-center gap-4 md:flex md:gap-7">
-            <button
-              onClick={() => scrollToSection("home")}
-              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
-            >
-              {t.navHome}
-            </button>
-
-            <button
-              onClick={() => scrollToSection("analyzer")}
-              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
-            >
-              {t.navDetect}
-            </button>
-
-            <button
-              onClick={() => scrollToSection("how-it-works")}
-              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
-            >
-              {t.navHow}
-            </button>
-
-            <button
-              onClick={() => scrollToSection("about")}
-              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
-            >
-              {t.navAbout}
-            </button>
-
-            <button
-              onClick={() => scrollToSection("history")}
-              className="text-sm font-semibold text-slate-600 transition hover:text-green-700"
-            >
-              {t.navHistory}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
+        }
+        links={[
+          { label: t.navHome, onClick: () => scrollToSection("home") },
+          { label: t.navDetect, onClick: () => scrollToSection("analyzer") },
+          { label: t.navHow, onClick: () => scrollToSection("how-it-works") },
+          { label: t.navHistory, onClick: () => scrollToSection("history") },
+          { label: t.navAbout, onClick: () => scrollToSection("about") },
+        ]}
+        actions={
+          <>
             <label className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm sm:flex">
               <span className="text-xs uppercase tracking-wide text-slate-400">{t.languageLabel}</span>
 
@@ -1210,6 +1185,18 @@ export default function Home() {
                 value={language}
                 onChange={(event) => handleLanguageChange(event.target.value as Language)}
                 className="bg-transparent font-semibold text-slate-700 outline-none"
+                aria-label="Select website language"
+              >
+                <option value="en">{t.english}</option>
+                <option value="ta">{t.tamil}</option>
+              </select>
+            </label>
+
+            <label className="pg-mobile-language">
+              <span className="sr-only">{t.languageLabel}</span>
+              <select
+                value={language}
+                onChange={(event) => handleLanguageChange(event.target.value as Language)}
                 aria-label="Select website language"
               >
                 <option value="en">{t.english}</option>
@@ -1227,13 +1214,14 @@ export default function Home() {
                     await fetchNotifications();
                   }
                 }}
-                className="relative flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl shadow-sm transition hover:bg-green-50"
+                className="relative inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-green-50"
                 aria-label={t.notifications}
               >
-                🔔
+                <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>{t.notifications}</span>
 
                 {notificationCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                  <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                     {notificationCount}
                   </span>
                 )}
@@ -1280,10 +1268,8 @@ export default function Home() {
                     {!notificationsLoading && !notificationsError && notifications.length > 0 && notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-green-50"
+                        className={"flex w-full gap-3 rounded-xl p-3 text-left transition " + (notification.is_read ? "" : "bg-green-50")}
                       >
-                        <span className="text-xl">{getNotificationIcon(notification.notification_type)}</span>
-
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-slate-800">
                             {notification.title}
@@ -1292,6 +1278,11 @@ export default function Home() {
                           <p className="text-xs text-slate-500">
                             {notification.message}
                           </p>
+                          {notification.created_at && (
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              {new Date(notification.created_at).toLocaleString(language === "ta" ? "ta-IN" : "en-US")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1308,200 +1299,49 @@ export default function Home() {
                 </div>
               )}
             </div>
+          </>
+        }
+      />
+
+      <section id="home" className="pg-hero scroll-mt-24">
+        <div className="pg-hero-inner">
+          <div className="pg-hero-copy">
+            <Badge className="mb-5">{t.heroBadge}</Badge>
+            <h1>{t.heroMain}</h1>
+            <p className="pg-hero-subtitle">{t.heroSubtitle}</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button onClick={() => scrollToSection("analyzer")}>{t.heroCTA}</Button>
+              <Button variant="secondary" onClick={() => scrollToSection("how-it-works")}>{t.heroSecondary}</Button>
+            </div>
+            <div className="pg-hero-points" aria-label={t.guidanceAvailabilityNote}>
+              <span><i aria-hidden="true" />{t.modelClassesSummary}</span>
+              <span><i aria-hidden="true" />{t.verifiedOnly}</span>
+              <span><i aria-hidden="true" />{t.fieldLimitSummary}</span>
+            </div>
           </div>
-        </div>
-      </nav>
-
-      <section
-        id="home"
-        className="scroll-mt-24 relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-emerald-50 px-5 py-20 lg:py-28"
-      >
-
-        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-green-100 opacity-60 blur-3xl" />
-        <div className="absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-emerald-100 opacity-50 blur-3xl" />
-
-        <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-2">
-
-          <div>
-
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-green-200 bg-white px-4 py-2 text-sm font-semibold text-green-700 shadow-sm">
-              <span className="h-2 w-2 rounded-full bg-green-500" />
-              {t.heroBadge}
+          <Card className="pg-hero-card">
+            <div className="pg-hero-art">
+              <div className="pg-hero-art-label">{t.plantHealthScanner}</div>
+              <svg viewBox="0 0 420 360" role="img" aria-label={t.heroIllustration}>
+                <path d="M206 315 C206 243 200 174 173 94" fill="none" stroke="#d6e8d8" strokeWidth="8" strokeLinecap="round" />
+                <path d="M206 256 C151 245 105 213 93 164 C150 158 194 186 206 256Z" fill="#82b98b" />
+                <path d="M196 210 C239 191 277 152 281 106 C229 114 198 148 196 210Z" fill="#a5cb9d" />
+                <path d="M210 291 C257 277 299 243 310 202 C263 201 224 230 210 291Z" fill="#5a9e6d" />
+                <path d="M206 256 L119 172 M198 207 L265 121 M212 282 L294 216" stroke="#e3f0e2" strokeWidth="4" strokeLinecap="round" />
+                <ellipse cx="316" cy="85" rx="50" ry="18" fill="#ffffff" opacity=".2" transform="rotate(-34 316 85)" />
+                <circle cx="104" cy="87" r="34" fill="#ffffff" opacity=".12" />
+                <circle cx="346" cy="276" r="20" fill="#ffffff" opacity=".1" />
+              </svg>
+              <div className="pg-hero-visual-caption">{t.guidanceAvailabilityNote}</div>
             </div>
-
-            <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-tight text-slate-900 md:text-6xl lg:text-7xl">
-              {t.heroMain}
-            </h1>
-
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-              {t.heroSubtitle}
-            </p>
-
-            <div className="mt-9 flex flex-wrap gap-4">
-
-              <button
-                onClick={() => scrollToSection("analyzer")}
-                className="rounded-2xl bg-green-700 px-7 py-4 font-bold text-white shadow-lg shadow-green-700/20 transition hover:-translate-y-0.5 hover:bg-green-800"
-              >
-                {t.heroCTA}
-              </button>
-
-              <button
-                onClick={() => scrollToSection("how-it-works")}
-                className="rounded-2xl border border-slate-300 bg-white px-7 py-4 font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                {t.heroSecondary}
-              </button>
-
-            </div>
-
-            <div className="mt-10 flex flex-wrap gap-6 text-sm text-slate-500">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🤖</span>
-                {t.deepLearning}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-lg">📷</span>
-                {t.imageAnalysis}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🌱</span>
-                {t.plantCare}
-              </div>
-            </div>
-
-          </div>
-
-          {/* HERO CARD */}
-          <div className="relative">
-
-            <div className="rounded-[2rem] border border-white bg-white p-4 shadow-2xl shadow-green-900/10">
-
-              <div className="rounded-[1.5rem] bg-gradient-to-br from-green-700 to-emerald-600 p-8 text-white">
-
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-green-100">
-                      {t.plantHealthScanner}
-                    </p>
-
-                    <h2 className="mt-2 text-3xl font-black">
-                      {t.aiAnalysis}
-                    </h2>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/15 p-3 text-3xl backdrop-blur">
-                    🌿
-                  </div>
-                </div>
-
-                <div className="mt-8 rounded-2xl bg-white/10 p-5 backdrop-blur">
-
-                  <div className="flex items-center gap-4">
-
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl">
-                      📷
-                    </div>
-
-                    <div>
-                      <p className="font-bold">
-                        {t.uploadLabel}
-                      </p>
-
-                      <p className="text-sm text-green-100">
-                        JPG, PNG or WEBP
-                      </p>
-                    </div>
-
-                  </div>
-
-                </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-3">
-
-                  <div className="rounded-2xl bg-white/10 p-4 text-center">
-                    <div className="text-xl">🔬</div>
-                    <p className="mt-1 text-xs text-green-100">
-                      {t.aiModel}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/10 p-4 text-center">
-                    <div className="text-xl">📊</div>
-                    <p className="mt-1 text-xs text-green-100">
-                      {t.confidence}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/10 p-4 text-center">
-                    <div className="text-xl">🩺</div>
-                    <p className="mt-1 text-xs text-green-100">
-                      {t.guidance}
-                    </p>
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-
-            <div className="absolute -bottom-5 -left-5 hidden rounded-2xl border bg-white p-4 shadow-xl sm:block">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100">
-                  ✅
-                </div>
-
-                <div>
-                  <p className="text-xs text-slate-500">
-                    {t.detectionSystem}
-                  </p>
-
-                  <p className="text-sm font-bold text-green-700">
-                    {t.readyToAnalyze}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
+          </Card>
         </div>
       </section>
 
-      {/* STATS */}
-      <section className="border-y border-slate-200 bg-white px-5 py-7">
-        <div className="mx-auto grid max-w-5xl gap-6 text-center sm:grid-cols-3">
-
-          <div>
-            <p className="text-3xl font-black text-green-700">
-              AI
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {t.poweredDetection}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-3xl font-black text-green-700">
-              38
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {t.modelClasses}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-3xl font-black text-green-700">
-              24/7
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {t.digitalAssistance}
-            </p>
-          </div>
-
-        </div>
+      <section className="pg-facts-strip" aria-label="Platform notes">
+        <div><strong>38</strong><span>{t.modelClassesSummary}</span></div>
+        <div><strong>Source</strong><span>{t.verifiedOnly}</span></div>
+        <div><strong>Review</strong><span>{t.fieldLimitSummary}</span></div>
       </section>
 
       {/* ANALYZER */}
@@ -1530,8 +1370,8 @@ export default function Home() {
             {/* UPLOAD CARD */}
             <div className="rounded-[1.5rem] border-2 border-dashed border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-8 text-center md:p-12">
 
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-4xl shadow-md">
-                📷
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-[var(--pg-brand-800)] shadow-md">
+                <ImagePlus size={34} strokeWidth={1.7} aria-hidden="true" />
               </div>
 
               <h3 className="mt-6 text-2xl font-black text-slate-900">
@@ -1543,11 +1383,12 @@ export default function Home() {
               </p>
 
               <label className="mt-7 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-green-700 px-7 py-4 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-green-800">
-                📁 {t.chooseImage}
+                <Upload size={18} strokeWidth={1.8} aria-hidden="true" />
+                {t.chooseImage}
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -1633,9 +1474,8 @@ export default function Home() {
                     disabled={loading}
                     className="rounded-2xl bg-green-700 px-8 py-4 font-bold text-white shadow-lg transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {loading
-                      ? "🔄 " + t.aiAnalysis
-                      : "🔍 " + t.analyzePlant}
+                    {loading ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <Activity size={18} aria-hidden="true" />}
+                    {loading ? t.aiAnalysis : t.analyzePlant}
                   </button>
 
                   <button
@@ -1660,8 +1500,7 @@ export default function Home() {
                 className="mt-8 scroll-mt-24 rounded-2xl border border-red-200 bg-red-50 p-5 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <div className="flex gap-3">
-                  <span className="text-xl">⚠️</span>
-
+                  <CircleAlert size={21} className="shrink-0 text-red-700" aria-hidden="true" />
                   <div>
                     <h3 className="font-bold text-red-800">
                       {language === "ta" ? "பகுப்பாய்வு தோல்வியடைந்தது" : "Analysis failed"}
@@ -1707,8 +1546,8 @@ export default function Home() {
 
               <div className="bg-gradient-to-br from-green-700 to-emerald-600 p-8 text-center text-white md:p-12">
 
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white/15 text-4xl backdrop-blur">
-                  🌿
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-white">
+                  <Leaf size={30} strokeWidth={1.7} aria-hidden="true" />
                 </div>
 
                 <p className="mt-5 text-sm font-bold uppercase tracking-widest text-green-100">
@@ -1745,8 +1584,7 @@ export default function Home() {
                         {confidence.toFixed(2)}%
                       </p>
                     </div>
-
-                    <div className="text-3xl" aria-hidden="true">ℹ️</div>
+                    <Info size={25} className="text-[var(--pg-brand-700)]" aria-hidden="true" />
                   </div>
 
                   <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-200">
@@ -1814,10 +1652,6 @@ export default function Home() {
                 <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 p-6">
 
                   <div className="flex gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-2xl shadow-sm">
-                      💡
-                    </div>
-
                     <div>
                       <h3 className="text-xl font-black text-green-900">
                         {t.whatDoesThisMean}
@@ -1840,10 +1674,6 @@ export default function Home() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 text-xl">
-                    📖
-                  </div>
-
                   <h3 className="text-xl font-black">
                     {t.aboutCondition}
                   </h3>
@@ -1856,10 +1686,6 @@ export default function Home() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-xl">
-                    🔎
-                  </div>
-
                   <h3 className="text-xl font-black">
                     {t.commonSymptoms}
                   </h3>
@@ -1890,10 +1716,6 @@ export default function Home() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-xl">
-                    🧬
-                  </div>
-
                   <h3 className="text-xl font-black">
                     {t.possibleCauses}
                   </h3>
@@ -1916,10 +1738,6 @@ export default function Home() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 text-xl">
-                    🩺
-                  </div>
-
                   <h3 className="text-xl font-black">
                     {t.treatment}
                   </h3>
@@ -1984,10 +1802,6 @@ export default function Home() {
 
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-md">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-xl">
-                    🛡️
-                  </div>
-
                   <h3 className="text-xl font-black">
                     {t.preventionTips}
                   </h3>
@@ -2022,10 +1836,6 @@ export default function Home() {
             <div className="mt-8 rounded-3xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-7 shadow-md md:p-9">
 
               <div className="text-center">
-                <div className="text-4xl">
-                  🧮
-                </div>
-
                 <h3 className="mt-3 text-2xl font-black text-green-900">
                   {t.treatmentCalculator}
                 </h3>
