@@ -1,0 +1,20 @@
+{
+  "source_images": 34,
+  "source_counts": {
+    "backend_uploads": 33,
+    "test_images_fixture": 1
+  },
+  "decode_failures": 1,
+  "reference_counts": {
+    "PlantDoc protected evaluation": 123,
+    "PlantDoc mapped train_and_validation": 1337,
+    "PlantVillage train": 37993,
+    "PlantDoc partial extract": 681
+  },
+  "overlap_records": 450,
+  "distinct_source_images_with_match": 32,
+  "threshold_hamming": 6,
+  "all_inventory_sha256_computed": true,
+  "pHash_computed_for_decodable_files": 33,
+  "unlabeled_sources_used_for_training": 0
+}

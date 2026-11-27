@@ -1,0 +1,8 @@
+- Saved PlantDoc prediction rows: 236; eligible for exact-class metrics: 123.
+- Crop/species accuracy: 44/123 = 35.77%.
+- Exact disease-class accuracy: 24/123 = 19.51%.
+- Observed mapped classes: 16 of 38; 113 rows excluded.
+- Crop-level accuracy is derived by comparing the crop prefix before `___` in true and predicted approved labels.
+- The top five confused disease pairs are recorded in `diagnosis.json`.
+- Both wrong-crop errors and disease errors occur; crop/species confusion is a substantial failure mode.
+- Source labels have exclusions and label-noise concerns; no model evaluation was rerun.

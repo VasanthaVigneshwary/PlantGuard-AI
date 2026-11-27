@@ -1,0 +1,44 @@
+{
+  "input": "backend/ml/experiments/stage4_independent_validation/plantdoc_predictions.csv",
+  "rows_total": 236,
+  "eligible": 123,
+  "excluded": 113,
+  "observed_classes": 16,
+  "crop_correct": 44,
+  "crop_accuracy": 0.35772357723577236,
+  "disease_correct": 24,
+  "disease_accuracy": 0.1951219512195122,
+  "top5_confused_disease_pairs": [
+    {
+      "true": "Pepper,_bell___Bacterial_spot",
+      "predicted": "Pepper,_bell___healthy",
+      "count": 5
+    },
+    {
+      "true": "Tomato___Tomato_Yellow_Leaf_Curl_Virus",
+      "predicted": "Strawberry___Leaf_scorch",
+      "count": 4
+    },
+    {
+      "true": "Grape___Black_rot",
+      "predicted": "Strawberry___Leaf_scorch",
+      "count": 4
+    },
+    {
+      "true": "Apple___Cedar_apple_rust",
+      "predicted": "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot",
+      "count": 3
+    },
+    {
+      "true": "Tomato___Tomato_mosaic_virus",
+      "predicted": "Pepper,_bell___healthy",
+      "count": 3
+    }
+  ],
+  "exclusions": {
+    "ambiguous or unsupported PlantDoc label": 99,
+    "exact SHA-256 duplicate also present in PlantDoc train split": 11,
+    "visually reviewed near-duplicate also present in PlantDoc train split": 3
+  },
+  "interpretation": "Crop and exact-disease correctness are computed from the same 123 eligible saved prediction rows; partial PlantDoc class coverage limits conclusions."
+}
